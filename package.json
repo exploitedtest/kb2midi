@@ -1,0 +1,21 @@
+{
+  "name": "qwerty-midi-controller",
+  "version": "1.0.0",
+  "description": "A QWERTY keyboard MIDI controller for macOS",
+  "main": "index.html",
+  "scripts": {
+    "start": "http-server -p 8080 -o",
+    "dev": "http-server -p 8080 -o -c-1"
+  },
+  "dependencies": {
+    "http-server": "^14.1.1"
+  },
+  "devDependencies": {},
+  "keywords": ["midi", "controller", "keyboard", "music", "qwerty"],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/qwerty-midi-controller.git"
+  }
+}

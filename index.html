@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QWERTY MIDI Controller</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="header">
+        <h1>🎹 QWERTY MIDI Controller</h1>
+        <div class="status" id="status">Ready to play!</div>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="velocity">Velocity</label>
+            <input type="range" id="velocity" min="1" max="127" value="64">
+            <span id="velocityValue">64</span>
+        </div>
+        
+        <div class="control-group">
+            <label for="midiChannel">MIDI Channel</label>
+            <select id="midiChannel">
+                <option value="0">1</option>
+                <option value="1">2</option>
+                <option value="2">3</option>
+                <option value="3">4</option>
+                <option value="4">5</option>
+                <option value="5">6</option>
+                <option value="6">7</option>
+                <option value="7">8</option>
+                <option value="8">9</option>
+                <option value="9">10</option>
+                <option value="10">11</option>
+                <option value="11">12</option>
+                <option value="12">13</option>
+                <option value="13">14</option>
+                <option value="14">15</option>
+                <option value="15">16</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label>Keyboard Layout</label>
+            <select id="layoutSelect" onchange="switchLayout()">
+                <option value="expanded">Expanded</option>
+                <option value="simple">Simple</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label>Actions</label>
+            <button onclick="stopAllNotes()">Stop All Notes</button>
+            <button onclick="initMIDI()">Connect MIDI</button>
+        </div>
+    </div>
+
+    <div class="piano-container">
+        <div class="piano" id="piano"></div>
+    </div>
+
+    <div class="keyboard-mapping" id="keyboardMapping">
+        <!-- Content dynamically generated -->
+    </div>
+
+    <div class="instructions">
+        <h3>Setup Instructions</h3>
+        <p><strong>⚠️ Important:</strong> The Web MIDI API in browsers can't create new MIDI devices that other software can see. We need to create a virtual MIDI port first.</p>
+        
+        <h4>Step 1: Create a Virtual MIDI Port</h4>
+        
+        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 15px 0;">
+            <h5>📱 macOS (Sonoma/Ventura/Monterey/Big Sur):</h5>
+            <ol style="text-align: left; margin: 10px 0; padding-left: 20px;">
+                <li>Open <strong>Audio MIDI Setup</strong> (Applications > Utilities > Audio MIDI Setup)</li>
+                <li>Go to <strong>Window > Show MIDI Studio</strong></li>
+                <li>Double-click the <strong>IAC Driver</strong> icon</li>
+                <li>Check <strong>"Device is online"</strong></li>
+                <li>You should see "Bus 1" - this creates a virtual MIDI port</li>
+                <li>Optionally, click the <strong>+</strong> to add more ports or rename them</li>
+            </ol>
+        </div>
+        
+        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 15px 0;">
+            <h5>🪟 Windows 11:</h5>
+            <p><strong>Option A - loopMIDI (Recommended):</strong></p>
+            <ol style="text-align: left; margin: 10px 0; padding-left: 20px;">
+                <li>Download <strong>loopMIDI</strong> from <code>tobias-erichsen.de/software/loopmidi.html</code></li>
+                <li>Install and run loopMIDI</li>
+                <li>Click the <strong>"+"</strong> button to create a new virtual MIDI port</li>
+                <li>Name it something like "QWERTY Controller"</li>
+                <li>The port will appear in your DAW's MIDI inputs</li>
+            </ol>
+            
+            <p><strong>Option B - MIDI-OX + MIDI Yoke:</strong></p>
+            <ol style="text-align: left; margin: 10px 0; padding-left: 20px;">
+                <li>Download <strong>MIDI Yoke</strong> from <code>midiox.com</code></li>
+                <li>Install MIDI Yoke (creates virtual MIDI cables)</li>
+                <li>Download and install <strong>MIDI-OX</strong></li>
+                <li>Use "Out To MIDI Yoke: 1" as your virtual port</li>
+            </ol>
+            
+            <p><strong>Option C - Built-in (Windows 11 22H2+):</strong></p>
+            <ol style="text-align: left; margin: 10px 0; padding-left: 20px;">
+                <li>Go to <strong>Settings > Bluetooth & devices > More devices and printer settings</strong></li>
+                <li>Right-click and select <strong>"Add a device"</strong></li>
+                <li>Look for MIDI device options (availability varies)</li>
+            </ol>
+        </div>
+        
+        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 15px 0;">
+            <h5>🐧 Linux (Ubuntu/Debian):</h5>
+            <ol style="text-align: left; margin: 10px 0; padding-left: 20px;">
+                <li>Install ALSA utilities: <code>sudo apt install alsa-utils</code></li>
+                <li>Create virtual MIDI port: <code>sudo modprobe snd-virmidi</code></li>
+                <li>Or use <strong>QjackCtl</strong> for more advanced MIDI routing</li>
+                <li>Install via: <code>sudo apt install qjackctl</code></li>
+            </ol>
+        </div>
+        
+        <h4>Step 2: Use the Controller</h4>
+        <p><strong>Layout Options:</strong> Use the dropdown to switch between Simple and Expanded layouts</p>
+        <p><strong>Simple Layout:</strong> A S D F G H J K L (white keys), W E T Y U O P (black keys)</p>
+        <p><strong>Expanded Layout:</strong> Z-/ (base octave), Q-P (upper octave), number row for sharps</p>
+        <p><strong>Octave:</strong> - (minus) and = (equals) keys change octave</p>
+        <p><strong>Sustain:</strong> Hold SPACE</p>
+        <p><strong>Click "Connect MIDI" to enable MIDI output</strong></p>
+        <p><strong>Click on piano keys or use your computer keyboard to play!</strong></p>
+        
+        <h4>Step 3: Connect to Your DAW</h4>
+        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 15px 0;">
+            <p><strong>Logic Pro/GarageBand:</strong> Create new Software Instrument track, select the virtual MIDI port as input</p>
+            <p><strong>Ableton Live:</strong> Go to Preferences > Link/Tempo/MIDI > MIDI Ports, enable the virtual port</p>
+            <p><strong>FL Studio:</strong> Options > MIDI Settings, enable the virtual MIDI port in Input</p>
+            <p><strong>Reaper:</strong> Options > Preferences > MIDI Devices, enable the virtual port</p>
+        </div>
+    </div>
+
+    <script src="midi-controller.js"></script>
+</body>
+</html>
