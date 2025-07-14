@@ -74,6 +74,10 @@ jspm_packages/
 .nuxt
 dist
 
+# TypeScript
+*.tsbuildinfo
+.tsc-cache/
+
 # Gatsby files
 .cache/
 public
@@ -106,6 +110,7 @@ Desktop.ini
 *.swp
 *.swo
 *~
+.claude/
 
 # Backup files
 *.bak
@@ -127,3 +132,4 @@ error.log
 
 # Project specific
 # Add any project-specific ignores here
+

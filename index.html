@@ -16,12 +16,12 @@
         <div class="control-group">
             <label for="velocity">Velocity</label>
             <input type="range" id="velocity" min="1" max="127" value="64">
-            <span id="velocityValue">64</span>
+            <span id="velocity-value">64</span>
         </div>
         
         <div class="control-group">
             <label for="midiChannel">MIDI Channel</label>
-            <select id="midiChannel">
+            <select id="midi-channel">
                 <option value="0">1</option>
                 <option value="1">2</option>
                 <option value="2">3</option>
@@ -43,7 +43,7 @@
         
         <div class="control-group">
             <label>Keyboard Layout</label>
-            <select id="layoutSelect" onchange="switchLayout()">
+            <select id="layout-select">
                 <option value="expanded">Expanded</option>
                 <option value="simple">Simple</option>
             </select>
@@ -51,8 +51,7 @@
         
         <div class="control-group">
             <label>Actions</label>
-            <button onclick="stopAllNotes()">Stop All Notes</button>
-            <button onclick="initMIDI()">Connect MIDI</button>
+            <button id="panic-button">Stop All Notes</button>
         </div>
     </div>
 
@@ -60,8 +59,12 @@
         <div class="piano" id="piano"></div>
     </div>
 
-    <div class="keyboard-mapping" id="keyboardMapping">
+    <div class="keyboard-mapping" id="keyboard-mapping">
         <!-- Content dynamically generated -->
+    </div>
+    
+    <div class="octave-display">
+        Octave: <span id="current-octave">4</span>
     </div>
 
     <div class="instructions">
@@ -136,7 +139,11 @@
             <p><strong>Reaper:</strong> Options > Preferences > MIDI Devices, enable the virtual port</p>
         </div>
     </div>
+    
+    <div id="midi-help" style="display: none;">
+        <p class="error">⚠️ Web MIDI API not available. Please use Chrome, Edge, or Safari.</p>
+    </div>
 
-    <script src="midi-controller.js"></script>
+    <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

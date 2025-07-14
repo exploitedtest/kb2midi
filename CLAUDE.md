@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a web-based QWERTY keyboard MIDI controller that turns your computer keyboard into a piano keyboard with real MIDI output. The application is built with vanilla HTML, CSS, and JavaScript using the Web MIDI API.
+This is a professional web-based QWERTY keyboard MIDI controller that transforms your computer keyboard into a high-quality MIDI input device for DAWs and music production software. Built to be a reliable, expressive controller with advanced features rivaling hardware controllers.
 
 ## Development Commands
 
@@ -124,3 +124,71 @@ The application logs MIDI messages to browser console for debugging:
 - Note on/off events with note names and MIDI values
 - MIDI output device detection and selection
 - Error messages for MIDI-related issues
+
+## Future Vision - Professional MIDI Controller
+
+### Enhanced MIDI Output Capabilities
+- **Velocity curves** (linear, exponential, logarithmic, custom)
+- **Aftertouch simulation** via key hold duration
+- **Configurable note-off velocity**
+- **MIDI channel splitting** for multi-timbral control
+
+### Professional Performance Features
+- **Arpeggiator Engine**
+  - Multiple patterns (up, down, up/down, random, chord)
+  - Rate sync to BPM or free-running
+  - Gate length control
+  - Swing/shuffle timing
+  - Note order customization
+- **Latency compensation** and monitoring
+- **Note priority modes** (last, highest, lowest)
+- **Glide/portamento** control between notes
+- **Configurable key repeat** for rolls/trills
+
+### Advanced Control Mappings
+- **CC controls** via modifier keys (Shift+key for mod wheel, etc.)
+- **Assignable MIDI CC** using mouse wheel over keys
+- **Program change** shortcuts
+- **Multiple pedal controls** (sustain, sostenuto, soft)
+
+### Improved Visual Feedback
+- **Real-time velocity visualization** on keys
+- **MIDI activity indicators**
+- **Octave range highlighting**
+- **Current scale/mode visualization**
+- **Arpeggiator pattern visualization**
+
+### DAW Integration Features
+- **MIDI clock sync** indicator
+- **Transport controls** (play/stop/record via F-keys)
+- **Multiple virtual MIDI port** support
+- **Preset system** for different DAW configurations
+
+### Quality of Life Improvements
+- **Settings persistence** via localStorage
+- **MIDI panic button** (all notes off)
+- **Keyboard shortcut customization**
+- **Export/import configuration** files
+
+### Technical Architecture Improvements
+- **TypeScript migration** for better type safety and developer experience
+- **Modular ES6 architecture** with clear separation of concerns:
+  - Core MIDI engine module
+  - UI/visualization module
+  - Arpeggiator module
+  - Settings/preset module
+- **Service Worker** for offline functionality and PWA capabilities
+- **WebAssembly modules** for critical low-latency operations:
+  - Arpeggiator timing engine
+  - MIDI message processing
+  - Velocity curve calculations
+- **Event-driven architecture** for better performance
+- **Web Workers** for non-blocking MIDI processing
+
+### Implementation Priorities
+1. TypeScript conversion with proper interfaces for MIDI objects
+2. Modular refactoring of existing code
+3. Arpeggiator implementation with WebAssembly timing
+4. Advanced velocity and expression controls
+5. Preset system and configuration management
+6. Service Worker for offline capability

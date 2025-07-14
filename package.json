@@ -1,17 +1,25 @@
 {
   "name": "qwerty-midi-controller",
-  "version": "1.0.0",
-  "description": "A QWERTY keyboard MIDI controller for macOS",
+  "version": "2.0.0",
+  "description": "Professional web-based QWERTY keyboard MIDI controller",
   "main": "index.html",
+  "type": "module",
   "scripts": {
-    "start": "http-server -p 8080 -o",
-    "dev": "http-server -p 8080 -o -c-1"
+    "start": "vite preview",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit",
+    "serve": "http-server -p 8080 -c-1 -o dist"
   },
-  "dependencies": {
-    "http-server": "^14.1.1"
+  "dependencies": {},
+  "devDependencies": {
+    "@types/webmidi": "^2.0.10",
+    "http-server": "^14.1.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12"
   },
-  "devDependencies": {},
-  "keywords": ["midi", "controller", "keyboard", "music", "qwerty"],
+  "keywords": ["midi", "controller", "keyboard", "music", "qwerty", "daw", "typescript"],
   "author": "Your Name",
   "license": "MIT",
   "repository": {

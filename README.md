@@ -206,3 +206,47 @@ To modify the controller:
 ---
 
 **Enjoy making music with your QWERTY keyboard! 🎹**
+]
+
+### **Key Application Points for Debugging:**
+
+1. **MIDI Connection Issues**
+   ```typescript
+   // Set breakpoint in midi-engine.ts
+   async initialize(): Promise<boolean> {
+     // Debug MIDI access here
+   }
+   ```
+
+2. **Keyboard Input Issues**
+   ```typescript
+   // Set breakpoint in keyboard-input.ts
+   private handleKeyDown(event: KeyboardEvent): void {
+     // Debug key events here
+   }
+   ```
+
+3. **UI State Issues**
+   ```typescript
+   // Set breakpoint in ui-controller.ts
+   updatePianoKey(note: number, active: boolean): void {
+     // Debug piano key updates here
+   }
+   ```
+
+4. **Main Controller Logic**
+   ```typescript
+   // Set breakpoint in main.ts
+   private playNote(note: number, velocityOverride?: number): void {
+     // Debug note playing logic here
+   }
+   ```
+
+### **Useful Debug Configurations:**
+
+- **Chrome**: Best for general debugging
+- **Firefox**: Good for Web MIDI API testing
+- **Edge**: Alternative browser debugging
+- **Attach**: Connect to existing browser session
+
+The debugger configuration includes source maps support, so you can debug your TypeScript code directly even though it's compiled to JavaScript by Vite. This makes debugging much more intuitive! 🐛✨
