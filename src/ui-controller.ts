@@ -24,7 +24,7 @@ export class UIController {
   private midiChannelSelect: HTMLSelectElement;
   private layoutSelect: HTMLSelectElement;
   private clockStatusElement: HTMLElement;
-  private beatIndicatorTimeout?: number; // Store timeout to prevent overlapping pulses
+  private beatIndicatorTimeout?: ReturnType<typeof setTimeout>; // Store timeout to prevent overlapping pulses
   
   private activeKeys = new Map<number, HTMLElement>();
   private keyElements = new Map<string, HTMLElement>();

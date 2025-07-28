@@ -2,7 +2,7 @@
   "name": "qwerty-midi-controller",
   "version": "2.0.0",
   "description": "Professional web-based QWERTY keyboard MIDI controller",
-  "main": "index.html",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "start": "vite preview",
@@ -10,10 +10,16 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
-    "serve": "http-server -p 8080 -c-1 -o dist"
+    "serve": "http-server -p 8080 -c-1 -o dist",
+    "electron": "electron .",
+    "electron-dev": "NODE_ENV=development electron .",
+    "electron-build": "npm run build && electron-builder",
+    "electron-pack": "npm run build && electron-builder --publish=never"
   },
   "devDependencies": {
     "@types/webmidi": "^2.0.10",
+    "electron": "^37.2.4",
+    "electron-builder": "^26.0.12",
     "http-server": "^14.1.1",
     "typescript": "^5.3.3",
     "vite": "^7.0.6"
@@ -32,5 +38,45 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/yourusername/qwerty-midi-controller.git"
+  },
+  "build": {
+    "appId": "com.querty.midicontroller",
+    "productName": "Querty MIDI Controller",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "assets/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ]
+    }
   }
 }

@@ -23,7 +23,7 @@ export class Arpeggiator {
   private clockSync: ClockSync;
   private midiEngine: IMidiEngine | null = null;
   private onStepCallbacks: ((step: number, note: number) => void)[] = [];
-  private activeTimeouts: Set<number> = new Set();
+  private activeTimeouts: Set<ReturnType<typeof setTimeout>> = new Set();
 
   constructor(clockSync: ClockSync) {
     this.clockSync = clockSync;
