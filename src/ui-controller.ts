@@ -1,8 +1,19 @@
 import { KeyboardLayout, getMIDINoteName } from './types';
 
+// Unified control configuration interface
+interface UIControl {
+  id: string;
+  type: 'range' | 'select' | 'button';
+  setter?: (value: string) => void;
+  getter?: () => string | number;
+  displayId?: string; // For range controls that show values
+  displayFormatter?: (value: number) => string;
+}
+
 /**
  * Manages all user interface elements and interactions
  * Handles piano visualization, keyboard mapping display, and UI state management
+ * Now includes clock sync status display
  */
 export class UIController {
   private pianoContainer: HTMLElement;
@@ -12,10 +23,15 @@ export class UIController {
   private velocitySlider: HTMLInputElement;
   private midiChannelSelect: HTMLSelectElement;
   private layoutSelect: HTMLSelectElement;
+  private clockStatusElement: HTMLElement;
+  private beatIndicatorTimeout?: number; // Store timeout to prevent overlapping pulses
   
   private activeKeys = new Map<number, HTMLElement>();
   private keyElements = new Map<string, HTMLElement>();
   
+  // Unified control registry
+  private controls = new Map<string, UIControl>();
+
   constructor() {
     this.pianoContainer = document.getElementById('piano')!;
     this.keyboardMappingContainer = document.getElementById('keyboard-mapping')!;
@@ -24,21 +40,50 @@ export class UIController {
     this.velocitySlider = document.getElementById('velocity') as HTMLInputElement;
     this.midiChannelSelect = document.getElementById('midi-channel') as HTMLSelectElement;
     this.layoutSelect = document.getElementById('layout-select') as HTMLSelectElement;
-    
+    this.clockStatusElement = document.getElementById('clock-status')!;
+    this.createClockStatusElement();
     this.setupUIEventListeners();
+    this.initializeControls();
   }
 
   /**
-   * Sets up event listeners for UI controls
-   * Updates velocity display and prevents form submission on enter key
+   * Creates the clock status display element if it doesn't exist
+   */
+  private createClockStatusElement(): void {
+    if (!this.clockStatusElement) {
+      this.clockStatusElement = document.createElement('div');
+      this.clockStatusElement.id = 'clock-status';
+      this.clockStatusElement.className = 'clock-status';
+      this.clockStatusElement.textContent = '🔴 No Clock Sync';
+      
+      // Add beat indicator
+      const beatIndicator = document.createElement('div');
+      beatIndicator.id = 'beat-indicator';
+      beatIndicator.className = 'beat-indicator';
+      this.clockStatusElement.appendChild(beatIndicator);
+      
+      // Insert after the status element
+      this.statusElement.parentNode?.insertBefore(
+        this.clockStatusElement, 
+        this.statusElement.nextSibling
+      );
+    }
+  }
+
+  /**
+   * Sets up UI event listeners using the unified control system
    */
   private setupUIEventListeners(): void {
-    // Velocity display update
-    this.velocitySlider.addEventListener('input', () => {
-      const velocityValue = document.getElementById('velocity-value');
-      if (velocityValue) {
-        velocityValue.textContent = this.velocitySlider.value;
-      }
+    // Wire up velocity control with display update
+    this.wireControl({
+      id: 'velocity',
+      type: 'range',
+      setter: (value) => {
+        this.velocitySlider.value = value;
+      },
+      getter: () => this.velocitySlider.value,
+      displayId: 'velocity-value',
+      displayFormatter: (value) => value.toString()
     });
 
     // Prevent form submission on enter
@@ -48,6 +93,38 @@ export class UIController {
           e.preventDefault();
         }
       });
+    });
+  }
+
+  /**
+   * Wires up a single control using the unified system
+   * @param control - The control configuration
+   */
+  private wireControl(control: UIControl): void {
+    const element = document.getElementById(control.id);
+    if (!element) {
+      console.warn(`Control element not found: ${control.id}`);
+      return;
+    }
+
+    const eventType = control.type === 'range' ? 'input' : 'change';
+    
+    element.addEventListener(eventType, () => {
+      const value = (element as HTMLInputElement | HTMLSelectElement).value;
+      
+      // Call setter if provided
+      if (control.setter) {
+        control.setter(value);
+      }
+      
+      // Update display if configured
+      if (control.displayId && control.displayFormatter) {
+        const displayElement = document.getElementById(control.displayId);
+        if (displayElement) {
+          const numValue = parseInt(value);
+          displayElement.textContent = control.displayFormatter(numValue);
+        }
+      }
     });
   }
 
@@ -78,8 +155,8 @@ export class UIController {
   }
 
   /**
-   * Gets the current MIDI channel from the select dropdown
-   * @returns number - Current MIDI channel (1-16)
+   * Gets the current MIDI channel from the UI
+   * @returns number - The MIDI channel (1-16)
    */
   getMidiChannel(): number {
     return parseInt(this.midiChannelSelect.value);
@@ -109,55 +186,32 @@ export class UIController {
    * @param baseOctave - The base octave for note calculations
    */
   private createSimplePiano(_layout: KeyboardLayout, baseOctave: number): void {
-    const whiteNotes = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19];
-    const blackKeyPositions = [1, 3, null, 6, 8, 10, null, 13, 15, null, 18];
-    const keyboardKeys = ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', ']'];
-    const blackKeyboardKeys = ['W', 'E', null, 'T', 'Y', 'U', null, 'O', 'P', null, null];
+    const whiteNotes = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17];
+    const keyboardKeys = ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\''];
     
     // Create white keys
     whiteNotes.forEach((noteOffset, index) => {
-      const key = document.createElement('div');
-      key.className = 'key white-key';
-      const note = (baseOctave * 12) + noteOffset;
-      key.dataset.note = note.toString();
-      
-      const label = document.createElement('div');
-      label.className = 'key-label';
-      label.innerHTML = `<span class="note-label">${getMIDINoteName(note)}</span><br><span class="key-binding">${keyboardKeys[index]}</span>`;
-      key.appendChild(label);
-      
-      key.addEventListener('mousedown', () => this.handlePianoClick(note, true));
-      key.addEventListener('mouseup', () => this.handlePianoClick(note, false));
-      key.addEventListener('mouseleave', () => this.handlePianoClick(note, false));
-      
+      const key = this.createPianoKey(noteOffset, baseOctave, keyboardKeys[index]);
       this.pianoContainer.appendChild(key);
-      this.activeKeys.set(note, key);
+      this.activeKeys.set((baseOctave * 12) + noteOffset, key);
     });
     
-    // Create black keys
-    blackKeyPositions.forEach((noteOffset, index) => {
-      if (noteOffset !== null) {
-        const key = document.createElement('div');
-        key.className = 'key black-key';
-        const note = (baseOctave * 12) + noteOffset;
-        key.dataset.note = note.toString();
-        key.style.left = `${(index * 50) + 35}px`;
-        
-        const keyBinding = blackKeyboardKeys[index];
-        if (keyBinding) {
-          const label = document.createElement('div');
-          label.className = 'black-key-label';
-          label.textContent = keyBinding;
-          key.appendChild(label);
-        }
-        
-        key.addEventListener('mousedown', () => this.handlePianoClick(note, true));
-        key.addEventListener('mouseup', () => this.handlePianoClick(note, false));
-        key.addEventListener('mouseleave', () => this.handlePianoClick(note, false));
-        
-        this.pianoContainer.appendChild(key);
-        this.activeKeys.set(note, key);
-      }
+    // Create black keys with correct positioning from original JavaScript
+    const blackKeyData = [
+      { note: 1, left: 35, key: 'W' },   // C#
+      { note: 3, left: 75, key: 'E' },   // D#
+      { note: 6, left: 155, key: 'T' },  // F#
+      { note: 8, left: 195, key: 'Y' },  // G#
+      { note: 10, left: 235, key: 'U' }, // A#
+      { note: 13, left: 315, key: 'O' }, // C#
+      { note: 15, left: 355, key: 'P' }, // D#
+      { note: 18, left: 435, key: ']' }  // F# (second F#)
+    ];
+    
+    blackKeyData.forEach(({ note, left, key }) => {
+      const keyElement = this.createPianoKey(note, baseOctave, key, true, left);
+      this.pianoContainer.appendChild(keyElement);
+      this.activeKeys.set((baseOctave * 12) + note, keyElement);
     });
   }
 
@@ -168,62 +222,38 @@ export class UIController {
    * @param baseOctave - The base octave for note calculations
    */
   private createExpandedPiano(_layout: KeyboardLayout, baseOctave: number): void {
-    // Bottom row white keys
+    // Bottom row white keys (lower octave)
     const bottomWhiteNotes = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16];
     const bottomKeys = ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/'];
     
-    // Top row white keys  
-    const topWhiteNotes = [12, 14, 16, 17, 19, 21, 23, 24, 26, 28];
-    const topKeys = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
+    // Top row white keys (upper octave)  
+    const topWhiteNotes = [12, 14, 16, 17, 19, 21, 23, 24, 26, 28, 29, 31];
+    const topKeys = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']'];
     
-    // Create bottom row
+    // Create bottom row (lower notes)
     const bottomRow = document.createElement('div');
     bottomRow.className = 'piano-row bottom-row';
     
     bottomWhiteNotes.forEach((noteOffset, index) => {
-      const key = document.createElement('div');
-      key.className = 'key white-key';
-      const note = (baseOctave * 12) + noteOffset;
-      key.dataset.note = note.toString();
-      
-      const label = document.createElement('div');
-      label.className = 'key-label';
-      label.innerHTML = `<span class="note-label">${getMIDINoteName(note)}</span><br><span class="key-binding">${bottomKeys[index]}</span>`;
-      key.appendChild(label);
-      
-      key.addEventListener('mousedown', () => this.handlePianoClick(note, true));
-      key.addEventListener('mouseup', () => this.handlePianoClick(note, false));
-      key.addEventListener('mouseleave', () => this.handlePianoClick(note, false));
-      
+      const key = this.createPianoKey(noteOffset, baseOctave, bottomKeys[index]);
       bottomRow.appendChild(key);
-      this.activeKeys.set(note, key);
+      this.activeKeys.set((baseOctave * 12) + noteOffset, key);
     });
     
-    // Create top row
+    // Create top row (higher notes) - shifted left by 3 white keys to overlap duplicates
     const topRow = document.createElement('div');
     topRow.className = 'piano-row top-row';
+    topRow.style.marginLeft = '-123px'; // Shift left by 3 white keys (3 × 41px)
     
     topWhiteNotes.forEach((noteOffset, index) => {
-      const key = document.createElement('div');
-      key.className = 'key white-key';
-      const note = (baseOctave * 12) + noteOffset;
-      key.dataset.note = note.toString();
-      
-      const label = document.createElement('div');
-      label.className = 'key-label';
-      label.innerHTML = `<span class="note-label">${getMIDINoteName(note)}</span><br><span class="key-binding">${topKeys[index]}</span>`;
-      key.appendChild(label);
-      
-      key.addEventListener('mousedown', () => this.handlePianoClick(note, true));
-      key.addEventListener('mouseup', () => this.handlePianoClick(note, false));
-      key.addEventListener('mouseleave', () => this.handlePianoClick(note, false));
-      
+      const key = this.createPianoKey(noteOffset, baseOctave, topKeys[index]);
       topRow.appendChild(key);
-      this.activeKeys.set(note, key);
+      this.activeKeys.set((baseOctave * 12) + noteOffset, key);
     });
     
-    this.pianoContainer.appendChild(topRow);
+    // Add rows in correct order: bottom (lower notes) first, then top (higher notes)
     this.pianoContainer.appendChild(bottomRow);
+    this.pianoContainer.appendChild(topRow);
     
     // Add black keys
     this.addExpandedBlackKeys(baseOctave);
@@ -235,26 +265,27 @@ export class UIController {
    * @param baseOctave - The base octave for note calculations
    */
   private addExpandedBlackKeys(baseOctave: number): void {
-    // Bottom row black keys
+    // Bottom row black keys (C4 octave) - positioned between white keys
     const bottomBlackNotes = [
-      { note: 1, left: 35, key: 'S' },
-      { note: 3, left: 85, key: 'D' },
-      { note: 6, left: 185, key: 'G' },
-      { note: 8, left: 235, key: 'H' },
-      { note: 10, left: 285, key: 'J' },
-      { note: 13, left: 385, key: 'L' },
-      { note: 15, left: 435, key: ';' }
+      { note: 1, left: 25, key: 'S' },   // C#4 (between Z and X)
+      { note: 3, left: 66, key: 'D' },   // D#4 (between X and C)
+      { note: 6, left: 148, key: 'G' },  // F#4 (between C and V)
+      { note: 8, left: 189, key: 'H' },  // G#4 (between V and B)
+      { note: 10, left: 230, key: 'J' }, // A#4 (between B and N)
+      { note: 13, left: 312, key: 'L' }, // C#5 (between M and ,)
+      { note: 15, left: 353, key: ';' }  // D#5 (between , and .)
     ];
     
-    // Top row black keys
+    // Top row black keys (C5 octave) - positioned between white keys
     const topBlackNotes = [
-      { note: 13, left: 35, key: '2' },
-      { note: 15, left: 85, key: '3' },
-      { note: 18, left: 185, key: '5' },
-      { note: 20, left: 235, key: '6' },
-      { note: 22, left: 285, key: '7' },
-      { note: 25, left: 385, key: '9' },
-      { note: 27, left: 435, key: '0' }
+      { note: 13, left: 25, key: '2' },   // C#5 (between Q and W)
+      { note: 15, left: 66, key: '3' },   // D#5 (between W and E)
+      { note: 18, left: 148, key: '5' },  // F#5 (between E and R)
+      { note: 20, left: 189, key: '6' },  // G#5 (between R and T)
+      { note: 22, left: 230, key: '7' },  // A#5 (between T and Y)
+      { note: 25, left: 312, key: '9' },  // C#6 (between U and I)
+      { note: 27, left: 353, key: '0' },  // D#6 (between I and O)
+      { note: 30, left: 435, key: '=' }   // F#6 (between P and [)
     ];
     
     const bottomRow = this.pianoContainer.querySelector('.bottom-row')!;
@@ -262,45 +293,62 @@ export class UIController {
     
     // Add black keys to bottom row
     bottomBlackNotes.forEach(({ note: noteOffset, left, key: keyBinding }) => {
-      const key = document.createElement('div');
-      key.className = 'key black-key';
-      const note = (baseOctave * 12) + noteOffset;
-      key.dataset.note = note.toString();
-      key.style.left = `${left}px`;
-      
-      const label = document.createElement('div');
-      label.className = 'black-key-label';
-      label.textContent = keyBinding;
-      key.appendChild(label);
-      
-      key.addEventListener('mousedown', () => this.handlePianoClick(note, true));
-      key.addEventListener('mouseup', () => this.handlePianoClick(note, false));
-      key.addEventListener('mouseleave', () => this.handlePianoClick(note, false));
-      
+      const key = this.createPianoKey(noteOffset, baseOctave, keyBinding, true, left);
       bottomRow.appendChild(key);
-      this.activeKeys.set(note, key);
+      this.activeKeys.set((baseOctave * 12) + noteOffset, key);
     });
     
     // Add black keys to top row
     topBlackNotes.forEach(({ note: noteOffset, left, key: keyBinding }) => {
-      const key = document.createElement('div');
-      key.className = 'key black-key';
-      const note = (baseOctave * 12) + noteOffset;
-      key.dataset.note = note.toString();
-      key.style.left = `${left}px`;
-      
-      const label = document.createElement('div');
-      label.className = 'black-key-label';
-      label.textContent = keyBinding;
-      key.appendChild(label);
-      
-      key.addEventListener('mousedown', () => this.handlePianoClick(note, true));
-      key.addEventListener('mouseup', () => this.handlePianoClick(note, false));
-      key.addEventListener('mouseleave', () => this.handlePianoClick(note, false));
-      
+      const key = this.createPianoKey(noteOffset, baseOctave, keyBinding, true, left);
       topRow.appendChild(key);
-      this.activeKeys.set(note, key);
+      this.activeKeys.set((baseOctave * 12) + noteOffset, key);
     });
+  }
+
+  /**
+   * Creates a piano key element with proper event listeners and styling
+   * @param note - The MIDI note number
+   * @param noteOffset - The note offset within the octave
+   * @param baseOctave - The base octave for note calculations
+   * @param keyBinding - The keyboard key binding to display
+   * @param isBlack - Whether this is a black key
+   * @param leftPosition - Optional left position for black keys
+   * @returns The created key element
+   */
+  private createPianoKey(
+    noteOffset: number, 
+    baseOctave: number, 
+    keyBinding: string, 
+    isBlack: boolean = false, 
+    leftPosition?: number
+  ): HTMLElement {
+    const key = document.createElement('div');
+    key.className = `key ${isBlack ? 'black-key' : 'white-key'}`;
+    const note = (baseOctave * 12) + noteOffset;
+    key.dataset.note = note.toString();
+    
+    if (leftPosition !== undefined) {
+      key.style.left = `${leftPosition}px`;
+    }
+    
+    const label = document.createElement('div');
+    label.className = isBlack ? 'black-key-label' : 'key-label';
+    
+    if (isBlack) {
+      label.textContent = keyBinding;
+    } else {
+      label.innerHTML = `<span class="note-label">${getMIDINoteName(note)}</span><br><span class="key-binding">${keyBinding}</span>`;
+    }
+    
+    key.appendChild(label);
+    
+    // Add event listeners
+    key.addEventListener('mousedown', () => this.handlePianoClick(note, true));
+    key.addEventListener('mouseup', () => this.handlePianoClick(note, false));
+    key.addEventListener('mouseleave', () => this.handlePianoClick(note, false));
+    
+    return key;
   }
 
   /**
@@ -366,11 +414,11 @@ export class UIController {
         <div class="kb-key black-bg" data-key="KeyO">O</div>
         <div class="kb-key black-bg" data-key="KeyP">P</div>
         <div class="kb-key white-bg" data-key="BracketLeft">[</div>
-        <div class="kb-key white-bg" data-key="BracketRight">]</div>
+        <div class="kb-key black-bg" data-key="BracketRight">]</div>
       </div>
       <div class="keyboard-row">
         <div class="kb-key white-bg" data-key="KeyA">A</div>
-        <div class="kb-key black-bg" data-key="KeyS">S</div>
+        <div class="kb-key white-bg" data-key="KeyS">S</div>
         <div class="kb-key white-bg" data-key="KeyD">D</div>
         <div class="kb-key white-bg" data-key="KeyF">F</div>
         <div class="kb-key white-bg" data-key="KeyG">G</div>
@@ -384,11 +432,6 @@ export class UIController {
       <div class="keyboard-row">
         <div class="kb-key control-key" data-key="KeyZ">Z ↓</div>
         <div class="kb-key control-key" data-key="KeyX">X ↑</div>
-        <div class="kb-key white-bg" data-key="KeyC">C</div>
-        <div class="kb-key white-bg" data-key="KeyV">V</div>
-        <div class="kb-key white-bg" data-key="KeyB">B</div>
-        <div class="kb-key white-bg" data-key="KeyN">N</div>
-        <div class="kb-key white-bg" data-key="KeyM">M</div>
       </div>
       <div class="keyboard-row">
         <div class="kb-key control-key wide" data-key="Space">SPACE (Sustain)</div>
@@ -403,7 +446,6 @@ export class UIController {
   private getExpandedLayoutHTML(): string {
     return `
       <div class="keyboard-row">
-        <div class="kb-key white-bg" data-key="Digit1">1</div>
         <div class="kb-key black-bg" data-key="Digit2">2</div>
         <div class="kb-key black-bg" data-key="Digit3">3</div>
         <div class="kb-key white-bg" data-key="Digit4">4</div>
@@ -413,8 +455,8 @@ export class UIController {
         <div class="kb-key white-bg" data-key="Digit8">8</div>
         <div class="kb-key black-bg" data-key="Digit9">9</div>
         <div class="kb-key black-bg" data-key="Digit0">0</div>
-        <div class="kb-key control-key" data-key="Minus">- ↓</div>
-        <div class="kb-key control-key" data-key="Equal">= ↑</div>
+        <div class="kb-key white-bg" data-key="Minus">-</div>
+        <div class="kb-key black-bg" data-key="Equal">=</div>
       </div>
       <div class="keyboard-row">
         <div class="kb-key white-bg" data-key="KeyQ">Q</div>
@@ -427,9 +469,10 @@ export class UIController {
         <div class="kb-key white-bg" data-key="KeyI">I</div>
         <div class="kb-key white-bg" data-key="KeyO">O</div>
         <div class="kb-key white-bg" data-key="KeyP">P</div>
+        <div class="kb-key white-bg" data-key="BracketLeft">[</div>
+        <div class="kb-key white-bg" data-key="BracketRight">]</div>
       </div>
       <div class="keyboard-row">
-        <div class="kb-key white-bg" data-key="KeyA">A</div>
         <div class="kb-key black-bg" data-key="KeyS">S</div>
         <div class="kb-key black-bg" data-key="KeyD">D</div>
         <div class="kb-key white-bg" data-key="KeyF">F</div>
@@ -453,6 +496,8 @@ export class UIController {
         <div class="kb-key white-bg" data-key="Slash">/</div>
       </div>
       <div class="keyboard-row">
+        <div class="kb-key control-key" data-key="ArrowLeft">←</div>
+        <div class="kb-key control-key" data-key="ArrowRight">→</div>
         <div class="kb-key control-key wide" data-key="Space">SPACE (Sustain)</div>
       </div>
     `;
@@ -475,18 +520,90 @@ export class UIController {
   }
 
   /**
+   * Updates the clock sync status display
+   * @param status - The current clock sync status
+   * @param bpm - Optional BPM to display
+   */
+  updateClockStatus(status: 'synced' | 'free' | 'stopped', bpm?: number): void {
+    if (!this.clockStatusElement) return;
+    
+    let icon: string;
+    let text: string;
+    let className: string;
+    
+    switch (status) {
+      case 'synced':
+        icon = '🟢';
+        text = bpm ? `Synced to DAW (${bpm} BPM)` : 'Synced to DAW';
+        className = 'clock-status synced';
+        break;
+      case 'free':
+        icon = '🟡';
+        text = 'Free Running';
+        className = 'clock-status free';
+        break;
+      case 'stopped':
+        icon = '🔴';
+        text = 'Stopped';
+        className = 'clock-status stopped';
+        break;
+    }
+    
+    // Update text content (excluding beat indicator)
+    const textNode = this.clockStatusElement.childNodes[0];
+    if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+      textNode.textContent = `${icon} ${text}`;
+    } else {
+      this.clockStatusElement.insertBefore(
+        document.createTextNode(`${icon} ${text}`),
+        this.clockStatusElement.firstChild
+      );
+    }
+    
+    this.clockStatusElement.className = className;
+  }
+
+  /**
+   * Updates the beat indicator with a pulse animation
+   */
+  updateBeatIndicator(): void {
+    const indicator = document.getElementById('beat-indicator');
+    if (indicator) {
+      clearTimeout(this.beatIndicatorTimeout);
+      indicator.classList.add('pulse');
+      this.beatIndicatorTimeout = setTimeout(() => {
+        indicator.classList.remove('pulse');
+      }, 100);
+    }
+  }
+
+  /**
    * Internal handler for piano click events
    * @param note - The MIDI note number
    * @param down - Whether the key is being pressed down
    */
-  private handlePianoClick: (note: number, down: boolean) => void = () => {};
+  private handlePianoClick: (note: number, down: boolean) => void = (note, down) => {
+    // Validate note value before calling handler
+    if (note === undefined || note === null || note < 0 || note > 127) {
+      console.error(`Invalid MIDI note value: ${note}`);
+      return;
+    }
+    
+    // Call the actual handler if it's been set
+    if (this.pianoClickHandler) {
+      this.pianoClickHandler(note, down);
+    }
+  };
+
+  // Store the actual piano click handler
+  private pianoClickHandler?: (note: number, down: boolean) => void;
   
   /**
    * Sets the handler for piano click events
    * @param handler - Function called when piano keys are clicked
    */
   onPianoClick(handler: (note: number, down: boolean) => void): void {
-    this.handlePianoClick = handler;
+    this.pianoClickHandler = handler;
   }
 
   /**
@@ -508,5 +625,88 @@ export class UIController {
     if (helpDiv) {
       helpDiv.style.display = 'block';
     }
+  }
+
+  /**
+   * Initializes the control registry with UI elements
+   */
+  private initializeControls(): void {
+    this.controls.set('velocity', {
+      id: 'velocity',
+      type: 'range',
+      getter: () => this.velocitySlider.value,
+      setter: (value) => {
+        this.velocitySlider.value = value;
+        const velocityValue = document.getElementById('velocity-value');
+        if (velocityValue) {
+          velocityValue.textContent = value;
+        }
+      },
+      displayId: 'velocity-value',
+      displayFormatter: (value) => value.toString()
+    });
+
+    this.controls.set('midiChannel', {
+      id: 'midi-channel',
+      type: 'select',
+      getter: () => this.midiChannelSelect.value,
+      setter: (value) => {
+        this.midiChannelSelect.value = value;
+      }
+    });
+
+    this.controls.set('layout', {
+      id: 'layout-select',
+      type: 'select',
+      getter: () => this.layoutSelect.value,
+      setter: (value) => {
+        this.layoutSelect.value = value;
+      }
+    });
+
+    this.controls.set('clockStatus', {
+      id: 'clock-status',
+      type: 'button', // Clock status is a button-like display, not a direct control
+      getter: () => this.clockStatusElement?.textContent?.replace(/🟢|🟡|🔴/g, '') || '',
+      setter: () => {}, // No setter for this display
+      displayFormatter: (value) => value.toString()
+    });
+  }
+
+  /**
+   * Updates a control value by its ID
+   * @param id - The ID of the control to update
+   * @param value - The new value to set
+   */
+  updateControl(id: string, value: string): void {
+    const control = this.controls.get(id);
+    if (control) {
+      if (control.setter) {
+        control.setter(value);
+      }
+    }
+  }
+
+  /**
+   * Gets the current value of a control by its ID
+   * @param id - The ID of the control to get
+   * @returns The current value of the control
+   */
+  getControlValue(id: string): string | number {
+    const control = this.controls.get(id);
+    if (control) {
+      if (control.getter) {
+        return control.getter();
+      }
+    }
+    return ''; // Default return if control not found or getter not implemented
+  }
+
+  /**
+   * Registers a new control with the UIController
+   * @param control - The control configuration
+   */
+  registerControl(control: UIControl): void {
+    this.controls.set(control.id, control);
   }
 }

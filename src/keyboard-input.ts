@@ -15,7 +15,7 @@ export class KeyboardInput {
   
   constructor() {
     this.initializeLayouts();
-    this.currentLayout = this.layouts.get('simple')!;
+    this.currentLayout = this.layouts.get('expanded')!;
     this.setupEventListeners();
     this.preventDefaultKeyBehaviors();
   }
@@ -50,6 +50,7 @@ export class KeyboardInput {
         // Top row (upper octave)
         'KeyQ': 12, 'KeyW': 14, 'KeyE': 16, 'KeyR': 17, 'KeyT': 19, 
         'KeyY': 21, 'KeyU': 23, 'KeyI': 24, 'KeyO': 26, 'KeyP': 28,
+        'BracketLeft': 29, 'Equal': 30, 'BracketRight': 31,
         
         // Black keys for bottom row
         'KeyS': 1, 'KeyD': 3, 'KeyG': 6, 'KeyH': 8, 'KeyJ': 10,
@@ -59,9 +60,9 @@ export class KeyboardInput {
         'Digit2': 13, 'Digit3': 15, 'Digit5': 18, 'Digit6': 20, 
         'Digit7': 22, 'Digit9': 25, 'Digit0': 27
       },
-      octaveDownKey: 'Minus',
-      octaveUpKey: 'Equal',
-      blackKeyPositions: [1, 3, 6, 8, 10, 13, 15, 18, 20, 22, 25, 27]
+      octaveDownKey: 'ArrowLeft',
+      octaveUpKey: 'ArrowRight',
+      blackKeyPositions: [1, 3, 6, 8, 10, 13, 15, 18, 20, 22, 25, 27, 30]
     });
   }
 
@@ -186,8 +187,7 @@ export class KeyboardInput {
   }
 
   /**
-   * Gets the current keyboard layout configuration
-   * @returns KeyboardLayout - The current layout with key mappings
+   * Gets the current layout
    */
   getLayout(): KeyboardLayout {
     return this.currentLayout;

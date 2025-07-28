@@ -45,6 +45,73 @@ body {
     border-color: #f44336;
 }
 
+.clock-status {
+    background: rgba(255,255,255,0.1);
+    padding: 8px 16px;
+    border-radius: 20px;
+    margin-bottom: 15px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.clock-status.synced {
+    background: rgba(76, 175, 80, 0.3);
+    border-color: #4CAF50;
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
+}
+
+.clock-status.free {
+    background: rgba(255, 193, 7, 0.3);
+    border-color: #FFC107;
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.3);
+}
+
+.clock-status.stopped {
+    background: rgba(244, 67, 54, 0.3);
+    border-color: #f44336;
+    box-shadow: 0 0 10px rgba(244, 67, 54, 0.3);
+}
+
+.arpeggiator-controls {
+    display: flex;
+    gap: 15px;
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.arpeggiator-controls .control-group {
+    background: rgba(255,255,255,0.05);
+    padding: 10px;
+    border-radius: 8px;
+    min-width: 120px;
+}
+
+.arpeggiator-controls .control-group label {
+    font-size: 12px;
+    margin-bottom: 5px;
+    opacity: 0.9;
+}
+
+.arpeggiator-controls .control-group input[type="range"] {
+    width: 100%;
+    margin: 5px 0;
+}
+
+.arpeggiator-controls .control-group span {
+    font-size: 11px;
+    opacity: 0.8;
+}
+
 .controls {
     display: flex;
     gap: 20px;
@@ -162,6 +229,13 @@ body {
     margin-bottom: 10px;
 }
 
+.keyboard-row {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
 .keyboard-key {
     background: rgba(255,255,255,0.2);
     padding: 8px 12px;
@@ -171,11 +245,52 @@ body {
     min-width: 40px;
     text-align: center;
     transition: all 0.1s ease;
-    border: 1px solid rgba(255,255,255,0.3);
 }
 
 .keyboard-key.active {
     background: #4CAF50;
+    transform: scale(0.95);
+}
+
+/* Keyboard mapping key styles to match the original */
+.kb-key {
+    background: rgba(255,255,255,0.2);
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-family: monospace;
+    font-weight: bold;
+    min-width: 40px;
+    text-align: center;
+    transition: all 0.1s ease;
+    margin: 2px;
+}
+
+.kb-key.white-bg {
+    background: rgba(255,255,255,0.3);
+    color: #333;
+    border: 1px solid rgba(255,255,255,0.5);
+}
+
+.kb-key.black-bg {
+    background: rgba(0,0,0,0.6);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+.kb-key.control-key {
+    background: rgba(76, 175, 80, 0.3);
+    color: #4CAF50;
+    border: 1px solid rgba(76, 175, 80, 0.5);
+    font-weight: bold;
+}
+
+.kb-key.control-key.wide {
+    min-width: 120px;
+}
+
+.kb-key.active {
+    background: #4CAF50;
+    color: white;
     transform: scale(0.95);
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
@@ -241,6 +356,166 @@ button:hover {
     transform: translateY(-1px);
 }
 
+button:focus {
+    outline: 2px solid #4CAF50;
+    outline-offset: 2px;
+    background: rgba(255,255,255,0.3);
+}
+
 button:active {
     transform: translateY(0) scale(0.98);
+}
+/* Add focus states for inputs and selects */
+input:focus, select:focus {
+    outline: 2px solid #4CAF50;
+    outline-offset: 2px;
+    background: rgba(255,255,255,0.3);
+}
+
+/* Piano key focus states */
+.key:focus {
+    outline: 2px solid #4CAF50;
+    outline-offset: 2px;
+}
+
+.white-key:focus {
+    background: linear-gradient(to bottom, #e8f5e8, #d0e0d0);
+}
+
+.black-key:focus {
+    background: linear-gradient(to bottom, #555, #333);
+}
+
+/* Missing piano classes */
+.key-label {
+    position: absolute;
+    bottom: 5px;
+    font-size: 10px;
+    font-weight: normal;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.black-key-label {
+    position: absolute;
+    bottom: 5px;
+    font-size: 9px;
+    font-weight: normal;
+    opacity: 0.8;
+    color: rgba(255, 255, 255, 0.8);
+    pointer-events: none;
+}
+
+.piano-row {
+    display: flex;
+    position: relative;
+    height: 120px;
+    margin: 10px 0;
+}
+
+.bottom-row {
+    margin-top: 5px;
+}
+
+.top-row {
+    margin-top: 5px;
+}
+
+.keyboard-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+    
+    .header h1 {
+        font-size: 2em;
+    }
+    
+    .controls {
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+    }
+    
+    .control-group {
+        width: 100%;
+        max-width: 300px;
+    }
+    
+    .piano-container {
+        padding: 10px;
+        overflow-x: auto;
+    }
+    
+    .piano {
+        min-width: 400px;
+    }
+    
+    .white-key {
+        width: 35px;
+    }
+    
+    .black-key {
+        width: 22px;
+    }
+    
+    .arpeggiator-controls {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .keyboard-mapping {
+        padding: 15px;
+        max-width: 100%;
+        transform: scale(0.9);
+        transform-origin: center top;
+    }
+    
+    .instructions {
+        max-width: 100%;
+        padding: 15px;
+        text-align: left;
+    }
+}
+
+@media (max-width: 480px) {
+    .header h1 {
+        font-size: 1.8em;
+    }
+    
+    .white-key {
+        width: 30px;
+        height: 100px;
+    }
+    
+    .black-key {
+        width: 20px;
+        height: 70px;
+    }
+    
+    .piano {
+        height: 100px;
+    }
+    
+    .piano-row {
+        height: 100px;
+    }
+    
+    .keyboard-mapping {
+        transform: scale(0.75);
+        transform-origin: center top;
+    }
+    
+    .kb-key {
+        min-width: 30px;
+        padding: 6px 8px;
+        font-size: 10px;
+    }
 }

@@ -12,14 +12,21 @@
     "type-check": "tsc --noEmit",
     "serve": "http-server -p 8080 -c-1 -o dist"
   },
-  "dependencies": {},
   "devDependencies": {
     "@types/webmidi": "^2.0.10",
     "http-server": "^14.1.1",
     "typescript": "^5.3.3",
-    "vite": "^5.0.12"
+    "vite": "^7.0.6"
   },
-  "keywords": ["midi", "controller", "keyboard", "music", "qwerty", "daw", "typescript"],
+  "keywords": [
+    "midi",
+    "controller",
+    "keyboard",
+    "music",
+    "qwerty",
+    "daw",
+    "typescript"
+  ],
   "author": "Your Name",
   "license": "MIT",
   "repository": {

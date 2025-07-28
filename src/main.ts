@@ -1,17 +1,30 @@
 import { MIDIEngine } from './midi-engine';
 import { KeyboardInput } from './keyboard-input';
 import { UIController } from './ui-controller';
-import { ControllerState } from './types';
+import { ClockSync } from './clock-sync';
+import { Arpeggiator } from './arpeggiator';
+import { ControllerState, ArpeggiatorPattern } from './types';
+
+// Enhanced control configuration with better type safety
+interface ControlConfig {
+  id: string;
+  setter: (value: string) => void;
+  type?: 'select' | 'range' | 'button';
+  displayId?: string; // For range controls that show values
+  displayFormatter?: (value: number) => string;
+}
 
 /**
  * Main controller class that orchestrates all components
- * Coordinates between MIDI engine, keyboard input, and UI controller
+ * Coordinates between MIDI engine, keyboard input, UI controller, clock sync, and arpeggiator
  * Manages the overall state and event flow of the application
  */
 class MIDIController {
   private midiEngine: MIDIEngine;
   private keyboardInput: KeyboardInput;
   private uiController: UIController;
+  private clockSync: ClockSync;
+  private arpeggiator: Arpeggiator;
   
   private state: ControllerState = {
     currentOctave: 4,
@@ -21,20 +34,22 @@ class MIDIController {
     pressedKeys: new Set(),
     sustainPedalActive: false,
     sustainedNotes: new Set(),
-    currentLayout: 'simple'
+    currentLayout: 'expanded'
   };
 
   constructor() {
-    this.midiEngine = new MIDIEngine();
+    this.clockSync = new ClockSync();
+    this.midiEngine = new MIDIEngine(this.clockSync);
     this.keyboardInput = new KeyboardInput();
     this.uiController = new UIController();
+    this.arpeggiator = new Arpeggiator(this.clockSync);
     
     this.initialize();
   }
 
   /**
    * Initializes the MIDI controller application
-   * Sets up MIDI connection, keyboard handlers, and UI event handlers
+   * Sets up MIDI connection, keyboard handlers, UI event handlers, and clock sync
    * @returns Promise<void> - Resolves when initialization is complete
    */
   private async initialize(): Promise<void> {
@@ -63,6 +78,12 @@ class MIDIController {
       this.uiController.updateStatus(error.message, 'error');
     });
 
+    // Set up clock sync callbacks
+    this.setupClockSyncCallbacks();
+
+    // Set up arpeggiator
+    this.setupArpeggiator();
+
     // Set up keyboard input handlers
     this.setupKeyboardHandlers();
     
@@ -71,6 +92,59 @@ class MIDIController {
     
     // Initialize UI
     this.updateUI();
+  }
+
+  /**
+   * Sets up clock sync event handlers
+   */
+  private setupClockSyncCallbacks(): void {
+    let lastBPMUpdate = 0;
+    
+    // Update UI when clock status changes
+    this.clockSync.onStart(() => {
+      const bpm = this.clockSync.getBPM();
+      this.uiController.updateClockStatus('synced', bpm);
+    });
+
+    this.clockSync.onStop(() => {
+      this.uiController.updateClockStatus('stopped');
+    });
+
+    // Optimized BPM updates - only update every second
+    this.clockSync.onTick(() => {
+      const now = performance.now();
+      if (now - lastBPMUpdate > 1000) { // Update every second
+        if (this.clockSync.isRunning()) {
+          const bpm = this.clockSync.getBPM();
+          this.uiController.updateClockStatus('synced', bpm);
+        }
+        lastBPMUpdate = now;
+      }
+    });
+
+    // Beat indicator on quarter notes
+    this.clockSync.onQuarterNote(() => {
+      this.uiController.updateBeatIndicator();
+    });
+  }
+
+  /**
+   * Sets up arpeggiator functionality
+   */
+  private setupArpeggiator(): void {
+    // Connect arpeggiator to MIDI engine
+    this.arpeggiator.setMidiEngine(this.midiEngine);
+
+    // Set up arpeggiator step callbacks for visual feedback
+    this.arpeggiator.onStep((_step, note) => {
+      // Visual feedback for arpeggiator steps
+      this.uiController.updatePianoKey(note, true);
+      
+      // Turn off after a short delay
+      setTimeout(() => {
+        this.uiController.updatePianoKey(note, false);
+      }, 100);
+    });
   }
 
   /**
@@ -117,7 +191,7 @@ class MIDIController {
   }
 
   /**
-   * Sets up UI event handlers for layout changes and piano clicks
+   * Sets up all UI event handlers using a unified control wiring system
    */
   private setupUIHandlers(): void {
     // Layout change handler
@@ -133,6 +207,112 @@ class MIDIController {
         this.stopNote(note);
       }
     });
+
+    // Unified control configurations
+    const controlConfigs: ControlConfig[] = [
+      // Panic button
+      {
+        id: 'panic-button',
+        setter: () => {
+          this.stopAllNotes();
+          this.midiEngine.panic();
+          this.uiController.updateStatus('All notes stopped', 'info');
+        },
+        type: 'button'
+      },
+      
+      // Arpeggiator toggle
+      {
+        id: 'arpeggiator-toggle',
+        setter: () => {
+          this.toggleArpeggiator();
+          const enabled = this.arpeggiator.isEnabled();
+          const button = document.getElementById('arpeggiator-toggle');
+          if (button) {
+            button.textContent = enabled ? 'Disable Arpeggiator' : 'Enable Arpeggiator';
+          }
+          
+          // Show/hide arpeggiator controls
+          const arpControls = document.getElementById('arpeggiator-controls');
+          if (arpControls) {
+            arpControls.style.display = enabled ? 'block' : 'none';
+          }
+        },
+        type: 'button'
+      },
+      
+      // Arpeggiator pattern
+      {
+        id: 'arp-pattern',
+        setter: (value) => this.arpeggiator.setPattern(value as ArpeggiatorPattern),
+        type: 'select'
+      },
+      
+      // Arpeggiator division
+      {
+        id: 'arp-division',
+        setter: (value) => this.arpeggiator.setClockDivisor(parseInt(value)),
+        type: 'select'
+      },
+      
+      // Arpeggiator gate
+      {
+        id: 'arp-gate',
+        setter: (value) => {
+          const numValue = parseInt(value);
+          this.arpeggiator.setGateLength(numValue / 100);
+        },
+        type: 'range',
+        displayId: 'arp-gate-value',
+        displayFormatter: (value) => `${value}%`
+      },
+      
+      // Arpeggiator swing
+      {
+        id: 'arp-swing',
+        setter: (value) => {
+          const numValue = parseInt(value);
+          this.arpeggiator.setSwing(numValue / 100);
+        },
+        type: 'range',
+        displayId: 'arp-swing-value',
+        displayFormatter: (value) => `${value}%`
+      }
+    ];
+
+    // Wire up all controls using unified system
+    this.wireControls(controlConfigs);
+  }
+
+  /**
+   * Wires up controls using a unified event handling system
+   * @param configs - Array of control configurations to wire
+   */
+  private wireControls(configs: ControlConfig[]): void {
+    configs.forEach(config => {
+      const element = document.getElementById(config.id);
+      if (!element) {
+        console.warn(`Control element not found: ${config.id}`);
+        return;
+      }
+
+      const eventType = config.type === 'range' ? 'input' : 'change';
+      
+      // Wire the main control event
+      element.addEventListener(eventType, () => {
+        const value = (element as HTMLInputElement | HTMLSelectElement).value;
+        config.setter(value);
+        
+        // Update display if configured
+        if (config.displayId && config.displayFormatter) {
+          const displayElement = document.getElementById(config.displayId);
+          if (displayElement) {
+            const numValue = parseInt(value);
+            displayElement.textContent = config.displayFormatter(numValue);
+          }
+        }
+      });
+    });
   }
 
   /**
@@ -142,15 +322,37 @@ class MIDIController {
    * @param velocityOverride - Optional velocity override (defaults to UI velocity)
    */
   private playNote(note: number, velocityOverride?: number): void {
+    // Validate note parameter
+    if (note === undefined || note === null || note < 0 || note > 127) {
+      console.error(`Invalid note in main playNote: ${note} (type: ${typeof note})`);
+      return;
+    }
+    
     // Check if note is already playing
     if (this.state.activeNotes.has(note.toString())) return;
     
     const velocity = velocityOverride || this.uiController.getVelocity();
     const channel = this.uiController.getMidiChannel();
     
+    // Validate velocity and channel
+    if (velocity === undefined || velocity === null || velocity < 0 || velocity > 127) {
+      console.error(`Invalid velocity in main playNote: ${velocity} (type: ${typeof velocity})`);
+      return;
+    }
+    if (channel === undefined || channel === null || channel < 1 || channel > 16) {
+      console.error(`Invalid channel in main playNote: ${channel} (type: ${typeof channel})`);
+      return;
+    }
+    
     this.midiEngine.playNote(note, velocity, channel);
     this.state.activeNotes.set(note.toString(), { note, velocity, timestamp: Date.now() });
     this.uiController.updatePianoKey(note, true);
+
+    // Add note to arpeggiator if enabled
+    if (this.arpeggiator.isEnabled()) {
+      const currentNotes = Array.from(this.state.activeNotes.values()).map(n => n.note);
+      this.arpeggiator.setNotes(currentNotes);
+    }
   }
 
   /**
@@ -170,6 +372,12 @@ class MIDIController {
       this.midiEngine.stopNote(note, 0, channel);
       this.state.activeNotes.delete(note.toString());
       this.uiController.updatePianoKey(note, false);
+    }
+
+    // Update arpeggiator notes
+    if (this.arpeggiator.isEnabled()) {
+      const currentNotes = Array.from(this.state.activeNotes.values()).map(n => n.note);
+      this.arpeggiator.setNotes(currentNotes);
     }
   }
 
@@ -205,6 +413,36 @@ class MIDIController {
       this.uiController.updatePianoKey(note, false);
     });
     this.state.sustainedNotes.clear();
+  }
+
+  /**
+   * Toggles the arpeggiator on/off
+   */
+  private toggleArpeggiator(): void {
+    const enabled = !this.arpeggiator.isEnabled();
+    this.arpeggiator.setEnabled(enabled);
+    
+    if (enabled) {
+      const currentNotes = Array.from(this.state.activeNotes.values()).map(n => n.note);
+      this.arpeggiator.setNotes(currentNotes);
+      this.uiController.updateStatus('Arpeggiator Enabled', 'success');
+    } else {
+      this.uiController.updateStatus('Arpeggiator Disabled', 'info');
+    }
+  }
+
+  /**
+   * Gets the current arpeggiator state
+   */
+  getArpeggiatorState() {
+    return this.arpeggiator.getState();
+  }
+
+  /**
+   * Gets the current clock sync state
+   */
+  getClockSyncState() {
+    return this.clockSync.getState();
   }
 
   /**
@@ -266,6 +504,13 @@ class MIDIController {
    */
   private updateUI(): void {
     const layout = this.keyboardInput.getLayout();
+    
+    // Ensure the layout select reflects the current state
+    const layoutSelect = document.getElementById('layout-select') as HTMLSelectElement;
+    if (layoutSelect && layoutSelect.value !== layout.name) {
+      layoutSelect.value = layout.name;
+    }
+    
     this.uiController.createPiano(layout, this.state.currentOctave);
     this.uiController.updateKeyboardMapping(layout);
     this.uiController.updateOctaveDisplay(this.state.currentOctave);

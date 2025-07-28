@@ -9,27 +9,34 @@ import {
   MIDI_SUSTAIN_PEDAL,
   getMIDINoteName
 } from './types';
+import { ClockSync } from './clock-sync';
 
 /**
  * Handles all MIDI communication and device management
  * Provides a clean interface for sending MIDI messages to connected outputs
+ * Now supports MIDI input for external clock sync
  */
 export class MIDIEngine {
   private state: MIDIState = {
     midiAccess: null,
     midiOutput: null,
+    midiInput: null,
     isConnected: false
   };
 
   private activeNotes = new Set<number>();
   private sustainedNotes = new Set<number>();
   private sustainPedalActive = false;
+  private clockSync: ClockSync;
   
   private onStateChange?: (connected: boolean) => void;
   private onError?: (error: Error) => void;
+  private onClockSyncChange?: (status: 'synced' | 'free' | 'stopped') => void;
 
-  constructor() {
+  constructor(clockSync: ClockSync) {
+    this.clockSync = clockSync;
     this.handleMIDIStateChange = this.handleMIDIStateChange.bind(this);
+    this.handleMIDIMessage = this.handleMIDIMessage.bind(this);
   }
 
   /**
@@ -49,7 +56,10 @@ export class MIDIEngine {
         this.state.midiAccess.onstatechange = this.handleMIDIStateChange;
       }
       
-      return this.autoSelectOutput();
+      const outputReady = this.autoSelectOutput();
+      const inputReady = this.setupMIDIInput();
+      
+      return outputReady && inputReady;
     } catch (error) {
       this.handleError(error as Error);
       return false;
@@ -70,6 +80,63 @@ export class MIDIEngine {
       this.state.midiOutput = null;
       this.onStateChange?.(false);
       this.autoSelectOutput();
+    }
+  }
+
+  /**
+   * Sets up MIDI input for external clock sync
+   * @returns boolean - True if MIDI input was successfully set up
+   */
+  private setupMIDIInput(): boolean {
+    if (!this.state.midiAccess) return false;
+    
+    const inputs = Array.from(this.state.midiAccess.inputs.values());
+    
+    if (inputs.length === 0) {
+      console.log('No MIDI inputs found - clock sync will not be available');
+      return true; // Not critical for basic functionality
+    }
+
+    // Try to find DAW output (usually the first input)
+    this.state.midiInput = inputs[0];
+    this.state.midiInput.onmidimessage = this.handleMIDIMessage;
+    
+    console.log(`MIDI Input connected: ${this.state.midiInput.name || 'Unknown'}`);
+    return true;
+  }
+
+  /**
+   * Handles incoming MIDI messages for clock sync
+   * @param event - The MIDI message event
+   */
+  private handleMIDIMessage(event: WebMidi.MIDIMessageEvent): void {
+    try {
+      const [status] = event.data;
+      
+      // MIDI Clock (0xF8)
+      if (status === 0xF8) {
+        this.clockSync.onMIDIClockTick();
+      }
+      
+      // MIDI Start (0xFA)
+      if (status === 0xFA) {
+        this.clockSync.onMIDIStart();
+        this.onClockSyncChange?.('synced');
+      }
+      
+      // MIDI Continue (0xFB)
+      if (status === 0xFB) {
+        this.clockSync.onMIDIContinue();
+        this.onClockSyncChange?.('synced');
+      }
+      
+      // MIDI Stop (0xFC)
+      if (status === 0xFC) {
+        this.clockSync.onMIDIStop();
+        this.onClockSyncChange?.('stopped');
+      }
+    } catch (error) {
+      console.error('Error handling MIDI message:', error);
     }
   }
 
@@ -135,41 +202,83 @@ export class MIDIEngine {
       return;
     }
 
+    // Validate message parameters
+    if (message.channel < 1 || message.channel > 16) {
+      console.error(`Invalid MIDI channel: ${message.channel}`);
+      return;
+    }
+
     let data: number[] = [];
     
     switch (message.type) {
       case 'noteon':
-        data = [MIDI_NOTE_ON | (message.channel - 1), message.note!, message.velocity!];
-        this.activeNotes.add(message.note!);
-        console.log(`Note ON: ${getMIDINoteName(message.note!)} (${message.note}) vel:${message.velocity}`);
+        if (message.note === undefined || message.note < 0 || message.note > 127) {
+          console.error(`Invalid MIDI note: ${message.note}`);
+          return;
+        }
+        if (message.velocity === undefined || message.velocity < 0 || message.velocity > 127) {
+          console.error(`Invalid MIDI velocity: ${message.velocity}`);
+          return;
+        }
+        data = [MIDI_NOTE_ON | (message.channel - 1), message.note, message.velocity];
+        this.activeNotes.add(message.note);
+        console.log(`Note ON: ${getMIDINoteName(message.note)} (${message.note}) vel:${message.velocity}`);
         break;
         
       case 'noteoff':
-        data = [MIDI_NOTE_OFF | (message.channel - 1), message.note!, message.velocity!];
-        if (!this.sustainPedalActive) {
-          this.activeNotes.delete(message.note!);
-        } else {
-          this.sustainedNotes.add(message.note!);
+        if (message.note === undefined || message.note < 0 || message.note > 127) {
+          console.error(`Invalid MIDI note: ${message.note}`);
+          return;
         }
-        console.log(`Note OFF: ${getMIDINoteName(message.note!)} (${message.note})`);
+        if (message.velocity === undefined || message.velocity < 0 || message.velocity > 127) {
+          console.error(`Invalid MIDI velocity: ${message.velocity}`);
+          return;
+        }
+        data = [MIDI_NOTE_OFF | (message.channel - 1), message.note, message.velocity];
+        if (!this.sustainPedalActive) {
+          this.activeNotes.delete(message.note);
+        } else {
+          this.sustainedNotes.add(message.note);
+        }
+        console.log(`Note OFF: ${getMIDINoteName(message.note)} (${message.note})`);
         break;
         
       case 'cc':
-        data = [MIDI_CC | (message.channel - 1), message.controller!, message.value!];
+        if (message.controller === undefined || message.controller < 0 || message.controller > 127) {
+          console.error(`Invalid MIDI controller: ${message.controller}`);
+          return;
+        }
+        if (message.value === undefined || message.value < 0 || message.value > 127) {
+          console.error(`Invalid MIDI controller value: ${message.value}`);
+          return;
+        }
+        data = [MIDI_CC | (message.channel - 1), message.controller, message.value];
         break;
         
       case 'programchange':
-        data = [MIDI_PROGRAM_CHANGE | (message.channel - 1), message.program!];
+        if (message.program === undefined || message.program < 0 || message.program > 127) {
+          console.error(`Invalid MIDI program: ${message.program}`);
+          return;
+        }
+        data = [MIDI_PROGRAM_CHANGE | (message.channel - 1), message.program];
         break;
         
       case 'pitchbend':
-        const bend = Math.max(0, Math.min(16383, message.bend! + 8192));
+        if (message.bend === undefined) {
+          console.error(`Invalid MIDI pitch bend: ${message.bend}`);
+          return;
+        }
+        const bend = Math.max(0, Math.min(16383, message.bend + 8192));
         data = [MIDI_PITCH_BEND | (message.channel - 1), bend & 0x7F, (bend >> 7) & 0x7F];
         break;
     }
 
     if (data.length > 0) {
-      this.state.midiOutput.send(data);
+      try {
+        this.state.midiOutput.send(data);
+      } catch (error) {
+        console.error('Failed to send MIDI message:', error, 'Data:', data);
+      }
     }
   }
 
@@ -180,6 +289,20 @@ export class MIDIEngine {
    * @param channel - MIDI channel (1-16)
    */
   playNote(note: number, velocity: number, channel: number): void {
+    // Validate parameters before sending
+    if (note === undefined || note === null || note < 0 || note > 127) {
+      console.error(`Invalid note in playNote: ${note} (type: ${typeof note})`);
+      return;
+    }
+    if (velocity === undefined || velocity === null || velocity < 0 || velocity > 127) {
+      console.error(`Invalid velocity in playNote: ${velocity} (type: ${typeof velocity})`);
+      return;
+    }
+    if (channel === undefined || channel === null || channel < 1 || channel > 16) {
+      console.error(`Invalid channel in playNote: ${channel} (type: ${typeof channel})`);
+      return;
+    }
+    
     this.sendMessage({
       type: 'noteon',
       channel,
@@ -298,6 +421,13 @@ export class MIDIEngine {
    */
   onErrorHandler(callback: (error: Error) => void): void {
     this.onError = callback;
+  }
+
+  /**
+   * Gets the clock sync instance
+   */
+  getClockSync(): ClockSync {
+    return this.clockSync;
   }
 
   /**

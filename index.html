@@ -20,24 +20,24 @@
         </div>
         
         <div class="control-group">
-            <label for="midiChannel">MIDI Channel</label>
+            <label for="midi-channel">MIDI Channel</label>
             <select id="midi-channel">
-                <option value="0">1</option>
-                <option value="1">2</option>
-                <option value="2">3</option>
-                <option value="3">4</option>
-                <option value="4">5</option>
-                <option value="5">6</option>
-                <option value="6">7</option>
-                <option value="7">8</option>
-                <option value="8">9</option>
-                <option value="9">10</option>
-                <option value="10">11</option>
-                <option value="11">12</option>
-                <option value="12">13</option>
-                <option value="13">14</option>
-                <option value="14">15</option>
-                <option value="15">16</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+                <option value="13">13</option>
+                <option value="14">14</option>
+                <option value="15">15</option>
+                <option value="16">16</option>
             </select>
         </div>
         
@@ -52,6 +52,40 @@
         <div class="control-group">
             <label>Actions</label>
             <button id="panic-button">Stop All Notes</button>
+            <button id="arpeggiator-toggle">Enable Arpeggiator</button>
+        </div>
+        
+        <div class="arpeggiator-controls" id="arpeggiator-controls" style="display: none;">
+            <div class="control-group">
+                <label>Pattern</label>
+                <select id="arp-pattern">
+                    <option value="up">Up</option>
+                    <option value="down">Down</option>
+                    <option value="up-down">Up-Down</option>
+                    <option value="down-up">Down-Up</option>
+                    <option value="random">Random</option>
+                    <option value="chord">Chord</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Division</label>
+                <select id="arp-division">
+                    <option value="1">1/4</option>
+                    <option value="2">1/8</option>
+                    <option value="4" selected>1/16</option>
+                    <option value="8">1/32</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Gate</label>
+                <input type="range" id="arp-gate" min="0" max="100" value="50">
+                <span id="arp-gate-value">50%</span>
+            </div>
+            <div class="control-group">
+                <label>Swing</label>
+                <input type="range" id="arp-swing" min="0" max="100" value="0">
+                <span id="arp-swing-value">0%</span>
+            </div>
         </div>
     </div>
 
@@ -65,6 +99,11 @@
     
     <div class="octave-display">
         Octave: <span id="current-octave">4</span>
+    </div>
+    
+    <div id="clock-status" class="clock-status">
+        🔴 No Clock Sync
+        <div id="beat-indicator" class="beat-indicator"></div>
     </div>
 
     <div class="instructions">

@@ -3,6 +3,7 @@
 export interface MIDIState {
   midiAccess: WebMidi.MIDIAccess | null;
   midiOutput: WebMidi.MIDIOutput | null;
+  midiInput: WebMidi.MIDIInput | null;
   isConnected: boolean;
 }
 
@@ -51,6 +52,8 @@ export interface ArpeggiatorState {
   octaveRange: number;
   noteOrder: number[];
   currentStep: number;
+  syncToClock: boolean; // New: sync to external clock
+  clockDivisor: number; // New: clock division (1=quarter, 2=8th, 4=16th, etc.)
 }
 
 export type ArpeggiatorPattern = 'up' | 'down' | 'up-down' | 'down-up' | 'random' | 'chord';
@@ -142,4 +145,18 @@ export function getMIDINoteFromName(name: string): number {
   if (noteIndex === -1) throw new Error('Invalid note name');
   
   return (octave + 1) * 12 + noteIndex;
+}
+
+// MIDI Engine Interface for better type safety
+export interface IMidiEngine {
+  playNote(note: number, velocity: number, channel: number): void;
+  stopNote(note: number, velocity: number, channel: number): void;
+}
+
+export interface ClockSyncState {
+  isRunning: boolean;
+  ticks: number;
+  bpm: number;
+  status: 'synced' | 'free' | 'stopped';
+  lastTickTime: number;
 }

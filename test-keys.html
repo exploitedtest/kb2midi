@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Key Code Test</title>
+</head>
+<body>
+    <h1>Press keys to see their codes:</h1>
+    <div id="output"></div>
+    
+    <script>
+        document.addEventListener('keydown', (e) => {
+            const output = document.getElementById('output');
+            output.innerHTML += `<p>Key: ${e.key}, Code: ${e.code}</p>`;
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html> 
