@@ -133,3 +133,20 @@ error.log
 # Project specific
 # Add any project-specific ignores here
 
+# Apple Developer credentials and certificates
+build/embedded.provisionprofile
+build/entitlements.mas.plist
+*.developerprofile
+*.p12
+*.pem
+*.mobileprovision
+
+# Build outputs
+release/
+dist/
+build/
+*.dmg
+*.pkg
+*.exe
+*.AppImage
+

@@ -1,7 +1,7 @@
 {
   "name": "qwerty-midi-controller",
   "version": "2.0.0",
-  "description": "Professional web-based QWERTY keyboard MIDI controller",
+  "description": "2.5 octave QWERTY keyboard MIDI controller",
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
@@ -14,7 +14,13 @@
     "electron": "electron .",
     "electron-dev": "NODE_ENV=development electron .",
     "electron-build": "npm run build && electron-builder",
-    "electron-pack": "npm run build && electron-builder --publish=never"
+    "electron-pack": "npm run build && electron-builder --mac dmg --universal --publish=never",
+    "electron-pack-arm64": "npm run build && electron-builder --mac dmg --arm64 --publish=never",
+    "electron-pack-universal": "npm run build && electron-builder --mac dmg --universal --publish=never",
+    "electron-pack-mac": "npm run build && electron-builder --mac dmg --universal --arm64 --publish=never",
+    "electron-pack-win": "npm run build && electron-builder --win nsis --publish=never",
+    "electron-pack-all": "npm run electron-pack-mac && npm run electron-pack-win",
+    "build-mas": "MAS=1 npm run build && electron-builder --mac mas"
   },
   "devDependencies": {
     "@types/webmidi": "^2.0.10",
@@ -51,6 +57,7 @@
       "node_modules/**/*"
     ],
     "mac": {
+      "identity": null,
       "category": "public.app-category.music",
       "icon": "assets/icon.icns",
       "target": [
@@ -75,6 +82,22 @@
         {
           "target": "AppImage",
           "arch": ["x64"]
+        }
+      ]
+    },
+    "mas": {
+      "category": "public.app-category.music",
+      "entitlements": "build/entitlements.mas.plist",
+      "provisioningProfile": "build/embedded.provisionprofile",
+      "type": "distribution",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "target": [
+        {
+          "target": "mas",
+          "arch": [
+            "universal"
+          ]
         }
       ]
     }
