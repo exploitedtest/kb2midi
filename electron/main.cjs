@@ -20,6 +20,7 @@ const CONFIG = {
 let mainWindow;
 let tray;
 let isAlwaysOnTop = true;
+app.isQuitting = false;
 
 function createWindow() {
   try {
@@ -68,7 +69,7 @@ function createWindow() {
 
   // Prevent window from being closed, just hide it
   mainWindow.on('close', (event) => {
-    if (!app.isQuiting) {
+    if (!app.isQuitting) {
       event.preventDefault();
       mainWindow.hide();
     }
@@ -92,7 +93,7 @@ function toggleAlwaysOnTop(checked) {
 }
 
 function quitApp() {
-  app.isQuiting = true;
+  app.isQuitting = true;
   app.quit();
 }
 
@@ -181,8 +182,15 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    } else if (mainWindow) {
+      showAndFocusWindow();
     }
   });
+});
+
+// Ensure app.isQuitting is set on quit (for macOS)
+app.on('before-quit', () => {
+  app.isQuitting = true;
 });
 
 app.on('window-all-closed', () => {

@@ -13,9 +13,30 @@ export class KeyboardInput {
   private currentLayout: KeyboardLayout;
   private layouts = new Map<string, KeyboardLayout>();
   
+  // Store bound handlers for cleanup
+  private boundKeyDown: (event: KeyboardEvent) => void;
+  private boundKeyUp: (event: KeyboardEvent) => void;
+  private boundPreventDefault: (event: KeyboardEvent) => void;
+  private boundContextMenu: (event: Event) => void;
+  
   constructor() {
     this.initializeLayouts();
     this.currentLayout = this.layouts.get('expanded')!;
+    
+    // Bind handlers for cleanup
+    this.boundKeyDown = this.handleKeyDown.bind(this);
+    this.boundKeyUp = this.handleKeyUp.bind(this);
+    this.boundPreventDefault = (e) => {
+      if (e.code === 'Space' || e.code === 'Tab') {
+        e.preventDefault();
+      }
+    };
+    this.boundContextMenu = (e) => {
+      if ((e.target as HTMLElement).closest('.piano-container')) {
+        e.preventDefault();
+      }
+    };
+    
     this.setupEventListeners();
     this.preventDefaultKeyBehaviors();
   }
@@ -70,8 +91,8 @@ export class KeyboardInput {
    * Sets up global keyboard event listeners for keydown and keyup events
    */
   private setupEventListeners(): void {
-    document.addEventListener('keydown', this.handleKeyDown.bind(this));
-    document.addEventListener('keyup', this.handleKeyUp.bind(this));
+    document.addEventListener('keydown', this.boundKeyDown);
+    document.addEventListener('keyup', this.boundKeyUp);
   }
 
   /**
@@ -80,18 +101,10 @@ export class KeyboardInput {
    */
   private preventDefaultKeyBehaviors(): void {
     // Prevent space from scrolling
-    window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' || e.code === 'Tab') {
-        e.preventDefault();
-      }
-    });
+    window.addEventListener('keydown', this.boundPreventDefault);
 
     // Disable right-click context menu on piano
-    document.addEventListener('contextmenu', (e) => {
-      if ((e.target as HTMLElement).closest('.piano-container')) {
-        e.preventDefault();
-      }
-    });
+    document.addEventListener('contextmenu', this.boundContextMenu);
   }
 
   /**
@@ -253,5 +266,23 @@ export class KeyboardInput {
     this.specialKeyHandlers.set('Space', () => {
       this.specialKeyHandlers.get('sustainOn')?.();
     });
+  }
+
+  /**
+   * Cleans up all event listeners and handlers
+   * Should be called when the application is shutting down
+   */
+  cleanup(): void {
+    // Remove all event listeners
+    document.removeEventListener('keydown', this.boundKeyDown);
+    document.removeEventListener('keyup', this.boundKeyUp);
+    window.removeEventListener('keydown', this.boundPreventDefault);
+    document.removeEventListener('contextmenu', this.boundContextMenu);
+    
+    // Clear all handler maps
+    this.keyDownHandlers.clear();
+    this.keyUpHandlers.clear();
+    this.specialKeyHandlers.clear();
+    this.pressedKeys.clear();
   }
 }

@@ -9,7 +9,7 @@ A web-based MIDI controller that turns your QWERTY keyboard into a piano keyboar
 - **Arpeggiator**: Automatic arpeggio patterns synced to external clock
 - **Two Layout Options**: Choose between Simple (1.5 octaves) and Expanded (2.5 octaves) layouts
 - **Visual Piano Interface**: Interactive piano with real-time feedback and octave numbers
-- **Layout-Specific Octave Controls**: Z/X (Simple) or -/= (Expanded)
+- **Layout-Specific Octave Controls**: Z/X (Simple) or left/right (Expanded)
 - **Sustain Pedal**: Spacebar acts as sustain pedal
 - **Velocity Control**: Adjustable note velocity (1-127)
 - **Multi-Channel Support**: Select any MIDI channel (1-16)

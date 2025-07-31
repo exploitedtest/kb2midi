@@ -431,6 +431,37 @@ export class MIDIEngine {
   }
 
   /**
+   * Cleans up MIDI connections and removes event listeners
+   * Should be called when the application is shutting down
+   */
+  cleanup(): void {
+    // Remove state change listener
+    if (this.state.midiAccess) {
+      this.state.midiAccess.onstatechange = null;
+    }
+
+    // Remove input message listener
+    if (this.state.midiInput) {
+      this.state.midiInput.onmidimessage = null;
+    }
+
+    // Clear all active notes
+    this.activeNotes.clear();
+    this.sustainedNotes.clear();
+
+    // Reset state
+    this.state.midiAccess = null;
+    this.state.midiOutput = null;
+    this.state.midiInput = null;
+    this.state.isConnected = false;
+
+    // Clear callbacks
+    this.onStateChange = undefined;
+    this.onError = undefined;
+    this.onClockSyncChange = undefined;
+  }
+
+  /**
    * Handles MIDI errors and calls the error callback if set
    * @param error - The error that occurred
    */

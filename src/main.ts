@@ -515,6 +515,33 @@ class MIDIController {
     this.uiController.updateKeyboardMapping(layout);
     this.uiController.updateOctaveDisplay(this.state.currentOctave);
   }
+
+  /**
+   * Cleans up all resources when the application is closing
+   * Stops all notes, cleans up MIDI connections, and removes event listeners
+   */
+  cleanup(): void {
+    // Stop all active notes
+    this.stopAllNotes();
+    
+    // Clean up MIDI engine
+    this.midiEngine.cleanup();
+    
+    // Clean up keyboard input
+    this.keyboardInput.cleanup();
+    
+    // Clean up arpeggiator
+    this.arpeggiator.setEnabled(false);
+    this.arpeggiator.clearStepCallbacks();
+    
+    // Clean up clock sync callbacks
+    this.clockSync.clearCallbacks();
+    
+    // Clear local state
+    this.state.activeNotes.clear();
+    this.state.sustainedNotes.clear();
+    this.state.pressedKeys.clear();
+  }
 }
 
 /**
@@ -522,5 +549,17 @@ class MIDIController {
  * Creates a new MIDIController instance to start the application
  */
 document.addEventListener('DOMContentLoaded', () => {
-  new MIDIController();
+  const controller = new MIDIController();
+  
+  // Clean up resources when the window is about to close
+  window.addEventListener('beforeunload', () => {
+    controller.cleanup();
+  });
+  
+  // Also clean up on page visibility change (for mobile/background scenarios)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      controller.cleanup();
+    }
+  });
 });
