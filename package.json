@@ -20,7 +20,7 @@
     "electron-pack-mac": "npm run build && electron-builder --mac dmg --universal --arm64 --publish=never",
     "electron-pack-win": "npm run build && electron-builder --win nsis --publish=never",
     "electron-pack-all": "npm run electron-pack-mac && npm run electron-pack-win",
-    "build-mas": "MAS=1 npm run build && electron-builder --mac mas"
+    "build-mas": "BUILD_NUMBER=${BUILD_NUMBER:-1} MAS=1 npm run build && electron-builder --mac mas --publish=never"
   },
   "devDependencies": {
     "@types/webmidi": "^2.0.10",
@@ -57,9 +57,16 @@
       "node_modules/**/*"
     ],
     "mac": {
-      "identity": null,
       "category": "public.app-category.music",
       "icon": "assets/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true,
+      "signIgnore": [
+        "/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/*.lproj/locale.pak"
+      ],
       "target": [
         {
           "target": "dmg",
@@ -87,17 +94,18 @@
     },
     "mas": {
       "category": "public.app-category.music",
+      "icon": "assets/icon.icns",
       "entitlements": "build/entitlements.mas.plist",
+      "entitlementsInherit": "build/entitlements.mas.plist",
       "provisioningProfile": "build/embedded.provisionprofile",
       "type": "distribution",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "bundleVersion": "${BUILD_NUMBER}",
       "target": [
         {
           "target": "mas",
-          "arch": [
-            "universal"
-          ]
+          "arch": ["universal"]
         }
       ]
     }
