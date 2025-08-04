@@ -1,5 +1,5 @@
 {
-  "name": "qwerty-midi-controller",
+  "name": "kb2midi",
   "version": "2.0.0",
   "description": "2.5 octave QWERTY keyboard MIDI controller",
   "main": "electron/main.cjs",
@@ -43,11 +43,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/qwerty-midi-controller.git"
+    "url": "https://github.com/yourusername/kb2midi.git"
   },
   "build": {
-    "appId": "com.querty.midicontroller",
-    "productName": "Querty MIDI Controller",
+    "appId": "com.kb2midi.app",
+    "productName": "kb2midi",
     "directories": {
       "output": "release"
     },

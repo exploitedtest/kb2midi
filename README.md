@@ -1,6 +1,6 @@
-# QWERTY MIDI Controller
+# kb2midi
 
-A web-based MIDI controller that turns your QWERTY keyboard into a piano keyboard with real MIDI output for macOS, Windows, and Linux. Now with **external MIDI clock sync** and **arpeggiator** support!
+A web-based MIDI controller that turns your QWERTY keyboard into a piano keyboard with real MIDI output for macOS and Windows.
 
 ## Features
 
@@ -72,7 +72,7 @@ python3 -m http.server 8080
 1. Download **loopMIDI** from `tobias-erichsen.de/software/loopmidi.html`
 2. Install and run loopMIDI
 3. Click the **"+"** button to create a new virtual MIDI port
-4. Name it something like "QWERTY Controller"
+4. Name it something like "kb2midi"
 5. The port will appear in your DAW's MIDI inputs
 
 **Option B - MIDI-OX + MIDI Yoke:**

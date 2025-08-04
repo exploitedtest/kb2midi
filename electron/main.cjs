@@ -9,7 +9,7 @@ const CONFIG = {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    title: 'Querty MIDI Controller'
+    title: 'kb2midi'
   },
   urls: {
     dev: 'http://localhost:8081',

@@ -1,4 +1,4 @@
-# Querty MIDI Controller - Electron Desktop App
+# kb2midi - 2.5 octave QWERTY keyboard MIDI controller
 
 ## Development
 
