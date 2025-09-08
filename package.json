@@ -1,11 +1,11 @@
 {
   "name": "kb2midi",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "2.5 octave QWERTY keyboard MIDI controller",
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
-    "start": "vite preview",
+    "start": "npm run build && vite preview",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
@@ -13,14 +13,14 @@
     "serve": "http-server -p 8080 -c-1 -o dist",
     "electron": "electron .",
     "electron-dev": "NODE_ENV=development electron .",
-    "electron-build": "npm run build && electron-builder",
-    "electron-pack": "npm run build && electron-builder --mac dmg --universal --publish=never",
-    "electron-pack-arm64": "npm run build && electron-builder --mac dmg --arm64 --publish=never",
-    "electron-pack-universal": "npm run build && electron-builder --mac dmg --universal --publish=never",
-    "electron-pack-mac": "npm run build && electron-builder --mac dmg --universal --arm64 --publish=never",
-    "electron-pack-win": "npm run build && electron-builder --win nsis --publish=never",
-    "electron-pack-all": "npm run electron-pack-mac && npm run electron-pack-win",
-    "build-mas": "BUILD_NUMBER=${BUILD_NUMBER:-1} MAS=1 npm run build && electron-builder --mac mas --publish=never"
+    "electron-build": "npm run build && electron-builder ${EB_ARGS:-}",
+    "electron-pack-mac-universal": "EB_ARGS='--mac dmg --universal --publish=never' npm run electron-build",
+    "electron-pack-mac-arm64": "EB_ARGS='--mac dmg --arm64 --publish=never' npm run electron-build",
+    "electron-pack-win": "EB_ARGS='--win nsis --publish=never' npm run electron-build",
+    "electron-pack-linux": "EB_ARGS='--linux AppImage --publish=never' npm run electron-build",
+    "electron-pack-all": "npm run electron-pack-mac-universal && npm run electron-pack-mac-arm64 && npm run electron-pack-win && npm run electron-pack-linux",
+    "electron-pack-mas": "MAS=1 npm run build && electron-builder --mac mas --publish=never",
+    "electron-pack-mas-arm64": "MAS=1 npm run build && electron-builder --mac mas --arm64 --publish=never"
   },
   "devDependencies": {
     "@types/webmidi": "^2.0.10",
@@ -70,7 +70,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },
@@ -79,7 +82,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -88,7 +93,9 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -101,11 +108,13 @@
       "type": "distribution",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "bundleVersion": "${BUILD_NUMBER}",
+      "bundleVersion": "${version}",
       "target": [
         {
           "target": "mas",
-          "arch": ["universal"]
+          "arch": [
+            "universal"
+          ]
         }
       ]
     }
