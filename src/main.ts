@@ -881,13 +881,21 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Resume/cleanup around visibility changes
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      controller.cleanup();
+// Be conservative in Electron: fullscreen/space transitions on macOS can briefly
+// flip visibility and race with focus events, dropping keyboard listeners.
+// In Electron, avoid full cleanup on visibility hidden; just silence notes.
+document.addEventListener('visibilitychange', () => {
+  const inElectron = typeof (window as any).electronAPI !== 'undefined';
+  if (document.hidden) {
+    if (inElectron) {
+      controller.allNotesOff();
     } else {
-      controller.resume();
+      controller.cleanup();
     }
-  });
+  } else {
+    controller.resume();
+  }
+});
 
   // Handle page show (e.g., bfcache returns)
   window.addEventListener('pageshow', () => {
@@ -901,6 +909,8 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('focus', () => {
     controller.resume();
   });
+
+  // Remove DOM fullscreen handling; OS-native fullscreen is handled by Electron
 
   // Electron bridge: resume/suspend + app focus hooks if available
   const electronAPI = window.electronAPI;

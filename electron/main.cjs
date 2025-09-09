@@ -1,6 +1,14 @@
 const { app, BrowserWindow, Menu, Tray, nativeImage, powerMonitor } = require('electron');
 const path = require('path');
 
+// Silence Chromium logging in production or if QUIET_LOGS=1 is set
+if (process.env.NODE_ENV !== 'development' || process.env.QUIET_LOGS === '1') {
+  try {
+    app.commandLine.appendSwitch('disable-logging');
+    app.commandLine.appendSwitch('log-level', '3');
+  } catch (_) {}
+}
+
 // Configuration constants
 const CONFIG = {
   isDev: process.env.NODE_ENV === 'development',
@@ -49,7 +57,9 @@ function createWindow() {
   // Load the app
   if (CONFIG.isDev) {
     mainWindow.loadURL(CONFIG.urls.dev);
-    mainWindow.webContents.openDevTools();
+    if (process.env.OPEN_DEVTOOLS === '1') {
+      mainWindow.webContents.openDevTools();
+    }
   } else {
     mainWindow.loadFile(path.join(__dirname, CONFIG.urls.prod));
   }
@@ -60,6 +70,25 @@ function createWindow() {
   // Show window when ready to prevent visual flash
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+  });
+
+  // macOS: ensure focus and inform renderer around fullscreen transitions
+  mainWindow.on('enter-full-screen', () => {
+    try {
+      mainWindow.focus();
+      mainWindow.webContents.send('app-focus');
+      // Temporarily disable always-on-top while in native fullscreen
+      // to avoid potential input/focus issues on macOS
+      mainWindow.setAlwaysOnTop(false);
+    } catch {}
+  });
+  mainWindow.on('leave-full-screen', () => {
+    try {
+      mainWindow.focus();
+      mainWindow.webContents.send('app-focus');
+      // Restore preferred always-on-top state when exiting fullscreen
+      mainWindow.setAlwaysOnTop(isAlwaysOnTop);
+    } catch {}
   });
 
   // Handle window closed
