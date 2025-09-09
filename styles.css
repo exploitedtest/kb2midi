@@ -144,6 +144,25 @@ body {
     font-size: 14px;
 }
 
+/* Wheel indicators for Mod/Pitch status */
+.wheel-indicator {
+    padding: 6px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.15);
+    font-size: 12px;
+    min-width: 48px;
+    text-align: center;
+    opacity: 0.9;
+    transition: all 0.15s ease;
+}
+
+.wheel-indicator.active {
+    background: rgba(76, 175, 80, 0.35);
+    border-color: #4CAF50;
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.35);
+}
+
 .piano-container {
     background: rgba(0,0,0,0.2);
     padding: 20px;
@@ -357,14 +376,31 @@ button:hover {
 }
 
 button:focus {
-    outline: 2px solid #4CAF50;
-    outline-offset: 2px;
-    background: rgba(255,255,255,0.3);
+    outline: none;
+    background: rgba(76, 175, 80, 0.3);
+    border-color: #4CAF50;
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.4);
 }
 
 button:active {
     transform: translateY(0) scale(0.98);
 }
+
+/* Press-and-hold button highlighting */
+button.button-pressed {
+    background: rgba(76, 175, 80, 0.4);
+    border-color: #4CAF50;
+    box-shadow: 0 0 12px rgba(76, 175, 80, 0.6);
+    transform: translateY(0) scale(0.96);
+    transition: all 0.1s ease;
+}
+
+button.button-pressed:hover {
+    background: rgba(76, 175, 80, 0.5);
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.7);
+    transform: translateY(0) scale(0.96);
+}
+
 /* Add focus states for inputs and selects */
 input:focus, select:focus {
     outline: 2px solid #4CAF50;

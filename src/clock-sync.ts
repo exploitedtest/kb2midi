@@ -20,6 +20,8 @@ export class ClockSync {
   private onStopCallbacks: (() => void)[] = [];
   private tickIntervals: number[] = [];
   private readonly MAX_INTERVALS = 10;
+  private stopTimeout: ReturnType<typeof setTimeout> | null = null;
+  private readonly STOP_TIMEOUT_MS = 500; // consider stopped if no clock for 0.5s
 
   /**
    * Handles incoming MIDI clock tick (0xF8)
@@ -28,6 +30,13 @@ export class ClockSync {
   onMIDIClockTick(): void {
     const now = performance.now();
     
+    // If ticks arrive without explicit Start/Continue, consider clock running
+    if (!this.state.isRunning) {
+      this.state.isRunning = true;
+      this.state.status = 'synced';
+      this.onStartCallbacks.forEach(callback => callback());
+    }
+
     if (this.state.lastTickTime > 0) {
       const tickInterval = now - this.state.lastTickTime;
       this.tickIntervals.push(tickInterval);
@@ -46,7 +55,7 @@ export class ClockSync {
     
     this.state.lastTickTime = now;
     this.state.ticks++;
-    
+
     // Trigger tick callbacks
     this.onTickCallbacks.forEach(callback => callback());
     
@@ -59,6 +68,16 @@ export class ClockSync {
     if (this.state.ticks % 6 === 0) {
       this.onSixteenthNoteCallbacks.forEach(callback => callback());
     }
+
+    // Reset stop timeout on each tick
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+    }
+    this.stopTimeout = setTimeout(() => {
+      this.state.isRunning = false;
+      this.state.status = 'stopped';
+      this.onStopCallbacks.forEach(callback => callback());
+    }, this.STOP_TIMEOUT_MS);
   }
 
   /**
@@ -82,6 +101,10 @@ export class ClockSync {
   onMIDIStop(): void {
     this.state.isRunning = false;
     this.state.status = 'stopped';
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+      this.stopTimeout = null;
+    }
     
     this.onStopCallbacks.forEach(callback => callback());
   }
@@ -93,6 +116,10 @@ export class ClockSync {
   onMIDIContinue(): void {
     this.state.isRunning = true;
     this.state.status = 'synced';
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+      this.stopTimeout = null;
+    }
     
     this.onStartCallbacks.forEach(callback => callback());
   }

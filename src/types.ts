@@ -23,6 +23,7 @@ export interface ActiveNote {
   note: number;
   velocity: number;
   timestamp: number;
+  channel: number;
 }
 
 export interface ControllerState {
@@ -54,9 +55,11 @@ export interface ArpeggiatorState {
   currentStep: number;
   syncToClock: boolean; // New: sync to external clock
   clockDivisor: number; // New: clock division (1=quarter, 2=8th, 4=16th, etc.)
+  notesPerStep: number;
+  slidingOverlap: boolean;
 }
 
-export type ArpeggiatorPattern = 'up' | 'down' | 'up-down' | 'down-up' | 'random' | 'chord';
+export type ArpeggiatorPattern = 'up' | 'down' | 'up-down' | 'down-up' | 'random' | 'chord' | 'stacked-chord' | 'timeline';
 
 export interface ControllerSettings {
   velocityCurve: VelocityCurve;

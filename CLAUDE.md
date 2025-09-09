@@ -4,191 +4,172 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a professional web-based QWERTY keyboard MIDI controller that transforms your computer keyboard into a high-quality MIDI input device for DAWs and music production software. Built to be a reliable, expressive controller with advanced features rivaling hardware controllers.
+kb2midi is a TypeScript-based web MIDI controller that transforms QWERTY keyboards into professional MIDI input devices. The application supports both web browser and Electron desktop deployment, featuring advanced capabilities including arpeggiator, clock sync, and multiple keyboard layouts.
 
 ## Development Commands
 
-### Start Development Server
+### Web Development
 ```bash
-npm run dev
+npm run dev           # Start Vite development server on port 8080
+npm run build         # TypeScript compile + Vite build to dist/
+npm run preview       # Preview production build
+npm run type-check    # TypeScript type checking without output
 ```
-- Starts http-server on port 8080 with live reload (cache disabled)
-- Automatically opens in browser
 
-### Start Production Server
+### Electron Desktop App
 ```bash
-npm start
+npm run electron         # Run Electron with production build
+npm run electron-dev     # Run Electron in development mode
+npm run electron-build   # Build Electron distributables (use EB_ARGS to customize)
+npm run electron-pack    # Build universal macOS DMG
 ```
-- Starts http-server on port 8080
-- Opens in browser
 
-### Alternative Local Server
+### Platform-Specific Packaging
 ```bash
-python3 -m http.server 8080
+npm run electron-pack-mac-arm64 # macOS Apple Silicon (arm64) DMG
+npm run electron-pack-win      # Windows NSIS installer
+npm run electron-pack-all      # Build for both macOS and Windows
 ```
-- Use if npm is not available
+
+### Legacy/Alternative Serving
+```bash
+npm start            # Vite preview mode
+npm run serve        # http-server fallback for dist/
+```
 
 ## Architecture
 
-### Core Components
+### Module Structure
 
-**index.html** - Main HTML structure containing:
-- Control interface (velocity, MIDI channel, layout selection)
-- Piano visual interface container
-- Keyboard mapping display
-- Setup instructions for virtual MIDI ports
+The application follows a modular TypeScript architecture with clear separation of concerns:
 
-**midi-controller.js** - Complete JavaScript functionality:
-- MIDI state management and Web MIDI API integration
-- Two keyboard layouts: Simple (19 keys) and Expanded (29 keys)
-- Key mapping systems for both layouts
-- Piano UI generation and visual feedback
-- Event handling for keyboard and mouse input
-- Octave control and sustain pedal functionality
+**src/main.ts** - Main orchestrator class (`MIDIController`) that coordinates all modules and manages application lifecycle. Handles initialization, event routing, and cleanup.
 
-**styles.css** - Visual styling:
-- Gradient background and glass-morphism effects
-- Piano key styling (white/black keys with active states)
-- Keyboard mapping visualization
-- Responsive control layout
+**src/midi-engine.ts** - Core MIDI communication layer (`MIDIEngine`) managing Web MIDI API connections, device selection, and message sending/receiving.
 
-### Key Architecture Patterns
+**src/keyboard-input.ts** - Keyboard event handling (`KeyboardInput`) with layout-aware key mapping, special key registration, and event filtering.
 
-**Layout System**: Two distinct keyboard layouts with different key mappings:
-- Simple layout: Uses Z/X for octave control, covers 1.5 octaves
-- Expanded layout: Uses -/= for octave control, covers 2.5 octaves
+**src/ui-controller.ts** - UI state management (`UIController`) handling DOM manipulation, visual feedback, and user interactions.
 
-**MIDI Integration**: 
-- Uses Web MIDI API for real MIDI output
-- Automatic virtual MIDI port detection (prioritizes IAC Driver on macOS)
-- MIDI channel selection (1-16) and velocity control
+**src/clock-sync.ts** - External MIDI clock synchronization (`ClockSync`) for timing-critical features like arpeggiator.
 
-**State Management**:
-- Active notes tracking to prevent duplicate note triggers
-- Pressed keys tracking for keyboard repeat prevention
-- Current octave and layout state
+**src/arpeggiator.ts** - Advanced arpeggiator engine (`Arpeggiator`) with multiple patterns, swing, gate, and clock sync.
+
+**src/types.ts** - Complete TypeScript type definitions for MIDI messages, state objects, and interfaces.
+
+### Key Architectural Patterns
+
+**Event-Driven Coordination**: Main controller subscribes to events from all modules and coordinates cross-module communication.
+
+**State Management**: Each module maintains its own state with controlled access through getter methods.
+
+**Layout System**: Keyboard layouts are data-driven configurations supporting different key mappings and octave controls.
+
+**MIDI Message Abstraction**: All MIDI communication goes through a typed message interface supporting note on/off, CC, pitch bend, and program change.
+
+**Clock Sync Integration**: External MIDI clock drives arpeggiator timing and UI beat indicators.
+
+### TypeScript Configuration
+
+- **Module System**: ES6 modules with Vite bundling
+- **Type Safety**: Strict TypeScript with comprehensive interfaces for MIDI and application state
+- **Web MIDI Types**: Uses `@types/webmidi` for Web MIDI API type definitions
+- **Build Target**: Modern browsers supporting Web MIDI API
+- **Path Aliases**: `@/*` maps to `src/*` for cleaner imports
+- **Code Style**: 2-space indentation, 100-120 char line length, avoid `any` types
+
+### Electron Integration
+
+- **Multi-Platform**: Supports macOS (Intel/Apple Silicon), Windows, and Linux
+- **Native Features**: System suspend/resume handling, app focus/blur events
+- **Power Management**: Automatic cleanup on system suspend, resume on system wake
+- **Application Lifecycle**: Handles app focus/blur with MIDI state management and note panic
+- **Security**: Sandboxed renderer with secure preload script for MIDI access
+- **IPC Bridge**: Secure communication for system events via contextBridge
 
 ## Key Technical Details
 
 ### MIDI Note Calculation
-Notes are calculated as: `(currentOctave * 12) + noteValue`
-- Each octave spans 12 semitones
-- Note values are offsets within the octave (C=0, C#=1, D=2, etc.)
+```typescript
+const midiNote = (currentOctave * 12) + noteOffset;
+```
+Note offsets are layout-specific mappings from keyboard keys to semitone positions within an octave.
 
-### Layout-Specific Controls
-- Simple layout: Z (octave down), X (octave up) 
-- Expanded layout: - (octave down), = (octave up)
-- Both layouts: Space (sustain pedal)
+### Keyboard Layouts
+- **Expanded Layout**: 2.5 octave range using QWERTY rows (Z-/ base, Q-P upper, 2,3,5,6,7,9,0 for sharps)
+- **Simple Layout**: 1.5 octave range using home row (A-L for white keys, W,E,T,Y,U,O,P for black keys)
+- **Octave Controls**: Layout-specific keys for octave shifting
+  - **Expanded Layout**: ArrowLeft (down), ArrowRight (up)
+  - **Simple Layout**: Z (down), X (up)
+- **Expression Controls**: 
+  - ArrowUp: Momentary Mod Wheel (CC1) with visual feedback
+  - ArrowDown: Momentary Pitch Bend Down with visual feedback
+  - Space: Sustain pedal
 
-### Browser Compatibility
-- Requires Web MIDI API support (Chrome/Safari/Edge)
-- Does NOT work in Firefox due to limited MIDI support
+### Arpeggiator Engine
+- **Clock Sync**: Integrates with external MIDI clock for perfect timing synchronization
+- **Live Parameter Integration**: Uses real-time UI values for MIDI channel and velocity
+- **Resilient Timing**: Works without explicit DAW transport events, auto-starts on clock detection
+- **Suspend/Resume Support**: Maintains state across application lifecycle events
+- **Patterns**: Up, Down, Up-Down, Down-Up, Random, and Chord modes
+- **Swing/Shuffle**: Configurable timing offset for humanized feel
+- **Gate Length**: Note duration control independent of step timing
 
-## Common Development Tasks
+### MIDI Clock Integration
+- **Input Selection**: Auto-detection of best MIDI clock source with manual override via Clock Input dropdown
+- **Smart Input Prioritization**: Prefers inputs matching output device names, then common virtual MIDI devices (IAC, loopMIDI), then first available
+- **Resilient Clock Detection**: Auto-starts on first MIDI clock tick (0xF8) even without explicit Start/Continue messages
+- **Stop Timeout**: 500ms timeout to detect clock停止 when no more ticks received
+- **Hot-plug Support**: Dynamic device list updates with automatic fallback when selected devices disconnect
+- **BPM Detection**: Real-time tempo analysis from incoming MIDI clock messages
+- **Beat Indicators**: Visual feedback synchronized to quarter note pulses
 
-### Adding New Keyboard Layout
-1. Define new key mapping object in `midi-controller.js`
-2. Add layout option to `switchLayout()` function
-3. Create corresponding UI generation function
-4. Update keyboard mapping display function
+## Virtual MIDI Port Requirements
 
-### Modifying Piano Range
-- Adjust `createSimplePiano()` or `createExpandedPiano()` functions
-- Update key positioning arrays for black keys
-- Modify note calculation arrays
+The Web MIDI API cannot create MIDI devices visible to other applications. Users must create virtual MIDI ports:
 
-### MIDI Functionality Changes
-- MIDI sending logic is centralized in `sendMIDI()` function
-- Note on/off handled by `playNote()` and `stopNote()`
-- Sustain pedal controlled via `handleSustainOn()/handleSustainOff()`
+- **macOS**: IAC Driver in Audio MIDI Setup
+- **Windows**: loopMIDI, MIDI-OX with MIDI Yoke, or built-in Windows 11 options
+- **Linux**: ALSA virtual MIDI (`snd-virmidi`) or QjackCtl
 
-## Virtual MIDI Port Setup
+## Application Lifecycle Management
 
-The application requires a virtual MIDI port for output since browsers cannot create MIDI devices directly:
+### Suspend/Resume System
+- **Web Browser**: Handles page visibility changes, focus/blur events, and bfcache navigation
+- **Electron Desktop**: Integrates with system power management and application focus events
+- **Cleanup Process**: Stops all notes, clears MIDI connections, removes event listeners, resets controllers
+- **Resume Process**: Reinitializes MIDI connections, reattaches event handlers, refreshes device lists, restores UI state
+- **Safety Measures**: All-notes-off, sustain pedal reset, mod wheel/pitch bend reset on blur/suspend
 
-**macOS**: Use IAC Driver in Audio MIDI Setup
-**Windows**: Use loopMIDI or MIDI-OX with MIDI Yoke
-**Linux**: Use ALSA virtual MIDI or QjackCtl
+### Device Hot-Plug Support
+- **Dynamic Discovery**: Automatically detects new MIDI devices and removes disconnected ones
+- **Smart Fallback**: Auto-switches to best available device when selected device disconnects
+- **UI Synchronization**: Updates device dropdowns in real-time without user intervention
 
-## Testing
+## Testing Approach
 
-No formal test suite exists. Testing is done manually by:
-1. Checking MIDI output with a DAW or MIDI monitor
-2. Testing keyboard layouts and octave controls
-3. Verifying piano visual feedback
-4. Testing sustain pedal functionality
+No formal test framework is configured. Testing is performed by:
+1. **Web Testing**: `npm run dev` + virtual MIDI port connection, verify note on/off, sustain, octave controls, arpeggiator, and clock sync
+2. **Electron Testing**: `npm run electron-dev`, confirm window behavior, "Always on Top" functionality, and MIDI access
+3. **MIDI Verification**: Use DAW software or MIDI monitor applications to validate output
+4. **Console Monitoring**: Check browser/Electron console for errors during testing
+5. **Cross-platform testing**: macOS, Windows, and Linux compatibility
+6. **Browser compatibility**: Chrome, Safari, Edge (Firefox not supported)
+7. **Power management**: Suspend/resume, focus/blur scenarios
+8. **Device hot-plug**: Connect/disconnect during operation
 
-## Browser Console
+## Build System
 
-The application logs MIDI messages to browser console for debugging:
-- Note on/off events with note names and MIDI values
-- MIDI output device detection and selection
-- Error messages for MIDI-related issues
+- **Vite**: Modern build tool with TypeScript support and hot reloading
+- **Development Server**: Port 8080 (aligned between Vite and Electron dev mode)
+- **Electron Builder**: Cross-platform desktop app packaging with code signing support
+- **Universal Binaries**: macOS builds support both Intel and Apple Silicon architectures
+- **Source Maps**: Generated for debugging production builds
+- **Output Directories**: `dist/` for web builds, `release/` for packaged desktop apps
+- **Type Checking**: Run `npm run type-check` before commits to ensure strict TypeScript compliance
 
-## Future Vision - Professional MIDI Controller
+## Browser Compatibility
 
-### Enhanced MIDI Output Capabilities
-- **Velocity curves** (linear, exponential, logarithmic, custom)
-- **Aftertouch simulation** via key hold duration
-- **Configurable note-off velocity**
-- **MIDI channel splitting** for multi-timbral control
-
-### Professional Performance Features
-- **Arpeggiator Engine**
-  - Multiple patterns (up, down, up/down, random, chord)
-  - Rate sync to BPM or free-running
-  - Gate length control
-  - Swing/shuffle timing
-  - Note order customization
-- **Latency compensation** and monitoring
-- **Note priority modes** (last, highest, lowest)
-- **Glide/portamento** control between notes
-- **Configurable key repeat** for rolls/trills
-
-### Advanced Control Mappings
-- **CC controls** via modifier keys (Shift+key for mod wheel, etc.)
-- **Assignable MIDI CC** using mouse wheel over keys
-- **Program change** shortcuts
-- **Multiple pedal controls** (sustain, sostenuto, soft)
-
-### Improved Visual Feedback
-- **Real-time velocity visualization** on keys
-- **MIDI activity indicators**
-- **Octave range highlighting**
-- **Current scale/mode visualization**
-- **Arpeggiator pattern visualization**
-
-### DAW Integration Features
-- **MIDI clock sync** indicator
-- **Transport controls** (play/stop/record via F-keys)
-- **Multiple virtual MIDI port** support
-- **Preset system** for different DAW configurations
-
-### Quality of Life Improvements
-- **Settings persistence** via localStorage
-- **MIDI panic button** (all notes off)
-- **Keyboard shortcut customization**
-- **Export/import configuration** files
-
-### Technical Architecture Improvements
-- **TypeScript migration** for better type safety and developer experience
-- **Modular ES6 architecture** with clear separation of concerns:
-  - Core MIDI engine module
-  - UI/visualization module
-  - Arpeggiator module
-  - Settings/preset module
-- **Service Worker** for offline functionality and PWA capabilities
-- **WebAssembly modules** for critical low-latency operations:
-  - Arpeggiator timing engine
-  - MIDI message processing
-  - Velocity curve calculations
-- **Event-driven architecture** for better performance
-- **Web Workers** for non-blocking MIDI processing
-
-### Implementation Priorities
-1. TypeScript conversion with proper interfaces for MIDI objects
-2. Modular refactoring of existing code
-3. Arpeggiator implementation with WebAssembly timing
-4. Advanced velocity and expression controls
-5. Preset system and configuration management
-6. Service Worker for offline capability
+- **Supported**: Chrome, Safari, Edge (Web MIDI API required)
+- **Not Supported**: Firefox (limited Web MIDI API implementation)
+- **Mobile**: Limited support due to Web MIDI API availability

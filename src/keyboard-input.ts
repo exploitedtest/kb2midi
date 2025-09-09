@@ -12,12 +12,13 @@ export class KeyboardInput {
   
   private currentLayout: KeyboardLayout;
   private layouts = new Map<string, KeyboardLayout>();
+  private currentVelocity: number = 80;
   
   // Store bound handlers for cleanup
   private boundKeyDown: (event: KeyboardEvent) => void;
   private boundKeyUp: (event: KeyboardEvent) => void;
-  private boundPreventDefault: (event: KeyboardEvent) => void;
   private boundContextMenu: (event: Event) => void;
+  private attached = false;
   
   constructor() {
     this.initializeLayouts();
@@ -26,11 +27,6 @@ export class KeyboardInput {
     // Bind handlers for cleanup
     this.boundKeyDown = this.handleKeyDown.bind(this);
     this.boundKeyUp = this.handleKeyUp.bind(this);
-    this.boundPreventDefault = (e) => {
-      if (e.code === 'Space' || e.code === 'Tab') {
-        e.preventDefault();
-      }
-    };
     this.boundContextMenu = (e) => {
       if ((e.target as HTMLElement).closest('.piano-container')) {
         e.preventDefault();
@@ -39,6 +35,7 @@ export class KeyboardInput {
     
     this.setupEventListeners();
     this.preventDefaultKeyBehaviors();
+    this.attached = true;
   }
 
   /**
@@ -91,7 +88,8 @@ export class KeyboardInput {
    * Sets up global keyboard event listeners for keydown and keyup events
    */
   private setupEventListeners(): void {
-    document.addEventListener('keydown', this.boundKeyDown);
+    // Use capture phase for keydown to ensure preventDefault runs first
+    document.addEventListener('keydown', this.boundKeyDown, { capture: true });
     document.addEventListener('keyup', this.boundKeyUp);
   }
 
@@ -100,11 +98,19 @@ export class KeyboardInput {
    * Prevents space from scrolling and disables context menu on piano
    */
   private preventDefaultKeyBehaviors(): void {
-    // Prevent space from scrolling
-    window.addEventListener('keydown', this.boundPreventDefault);
-
     // Disable right-click context menu on piano
     document.addEventListener('contextmenu', this.boundContextMenu);
+  }
+
+  /**
+   * Re-attaches keyboard event listeners after a cleanup
+   * Safe to call multiple times; only attaches if not already attached
+   */
+  attach(): void {
+    if (this.attached) return;
+    this.setupEventListeners();
+    this.preventDefaultKeyBehaviors();
+    this.attached = true;
   }
 
   /**
@@ -113,10 +119,18 @@ export class KeyboardInput {
    * @param event - The keyboard event
    */
   private handleKeyDown(event: KeyboardEvent): void {
+    // Prevent default behavior for arrow keys, space, and tab (including repeats)
+    if (event.code === 'Space' || event.code === 'Tab' || 
+        event.code === 'ArrowUp' || event.code === 'ArrowDown' || 
+        event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
+      event.preventDefault();
+      console.log(`Prevented default for ${event.code}, repeat: ${event.repeat}`);
+    }
+    
     // Ignore if modifier keys are pressed (except shift for velocity)
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     
-    // Ignore repeated events
+    // Ignore repeated events for our app logic (but still prevent default above)
     if (this.pressedKeys.has(event.code)) return;
     
     // Ignore if typing in input field
@@ -147,6 +161,18 @@ export class KeyboardInput {
     } else if (event.code === this.currentLayout.octaveUpKey) {
       event.preventDefault();
       this.specialKeyHandlers.get('octaveUp')?.();
+    } else if (event.code === 'ArrowUp') {
+      // Mod wheel full on while held
+      event.preventDefault();
+      this.specialKeyHandlers.get('modOn')?.();
+    } else if (event.code === 'ArrowDown') {
+      // Pitch bend full down while held
+      event.preventDefault();
+      this.specialKeyHandlers.get('pitchDownOn')?.();
+    } else if (event.code === 'Tab') {
+      // Arp division/rate boost while held
+      event.preventDefault();
+      this.specialKeyHandlers.get('arpBoostOn')?.();
     }
   }
 
@@ -167,6 +193,21 @@ export class KeyboardInput {
     if (event.code === 'Space') {
       event.preventDefault();
       this.specialKeyHandlers.get('sustainOff')?.();
+    } else if (event.code === 'ArrowUp') {
+      event.preventDefault();
+      this.specialKeyHandlers.get('modOff')?.();
+    } else if (event.code === 'ArrowDown') {
+      event.preventDefault();
+      this.specialKeyHandlers.get('pitchDownOff')?.();
+    } else if (event.code === this.currentLayout.octaveDownKey) {
+      event.preventDefault();
+      this.specialKeyHandlers.get('octaveDownOff')?.();
+    } else if (event.code === this.currentLayout.octaveUpKey) {
+      event.preventDefault();
+      this.specialKeyHandlers.get('octaveUpOff')?.();
+    } else if (event.code === 'Tab') {
+      event.preventDefault();
+      this.specialKeyHandlers.get('arpBoostOff')?.();
     }
   }
 
@@ -181,8 +222,8 @@ export class KeyboardInput {
     if (event.shiftKey) {
       return 127;
     }
-    // Default velocity (will be overridden by UI control)
-    return 80;
+    // Use cached velocity from UI control
+    return this.currentVelocity;
   }
 
   /**
@@ -259,6 +300,21 @@ export class KeyboardInput {
   }
 
   /**
+   * Clears any tracked pressed keys (used on blur to avoid stuck keys)
+   */
+  resetPressedKeys(): void {
+    this.pressedKeys.clear();
+  }
+
+  /**
+   * Sets the current velocity value for keyboard events
+   * @param velocity - The velocity value (1-127)
+   */
+  setVelocity(velocity: number): void {
+    this.currentVelocity = Math.max(1, Math.min(127, velocity));
+  }
+
+  /**
    * Registers the spacebar as the sustain pedal
    * Maps spacebar to sustain on/off handlers
    */
@@ -269,14 +325,40 @@ export class KeyboardInput {
   }
 
   /**
+   * Registers ArrowUp as Mod Wheel momentary switch
+   */
+  registerModWheel(): void {
+    this.specialKeyHandlers.set('ArrowUp', () => {
+      this.specialKeyHandlers.get('modOn')?.();
+    });
+  }
+
+  /**
+   * Registers ArrowDown as Pitch Bend (down) momentary switch
+   */
+  registerPitchBend(): void {
+    this.specialKeyHandlers.set('ArrowDown', () => {
+      this.specialKeyHandlers.get('pitchDownOn')?.();
+    });
+  }
+
+  /**
+   * Registers Tab as a momentary arpeggiator division/rate boost switch
+   */
+  registerArpBoost(): void {
+    this.specialKeyHandlers.set('Tab', () => {
+      this.specialKeyHandlers.get('arpBoostOn')?.();
+    });
+  }
+
+  /**
    * Cleans up all event listeners and handlers
    * Should be called when the application is shutting down
    */
   cleanup(): void {
     // Remove all event listeners
-    document.removeEventListener('keydown', this.boundKeyDown);
+    document.removeEventListener('keydown', this.boundKeyDown, { capture: true });
     document.removeEventListener('keyup', this.boundKeyUp);
-    window.removeEventListener('keydown', this.boundPreventDefault);
     document.removeEventListener('contextmenu', this.boundContextMenu);
     
     // Clear all handler maps
@@ -284,5 +366,6 @@ export class KeyboardInput {
     this.keyUpHandlers.clear();
     this.specialKeyHandlers.clear();
     this.pressedKeys.clear();
+    this.attached = false;
   }
 }

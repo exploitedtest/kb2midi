@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, powerMonitor } = require('electron');
 const path = require('path');
 
 // Configuration constants
@@ -12,7 +12,7 @@ const CONFIG = {
     title: 'kb2midi'
   },
   urls: {
-    dev: 'http://localhost:8081',
+    dev: 'http://localhost:8080',
     prod: '../dist/index.html'
   }
 };
@@ -186,6 +186,32 @@ app.whenReady().then(() => {
       showAndFocusWindow();
     }
   });
+
+  // Forward focus/blur events to renderer so it can resume/stop notes
+  app.on('browser-window-focus', () => {
+    if (mainWindow) mainWindow.webContents.send('app-focus');
+  });
+  app.on('browser-window-blur', () => {
+    if (mainWindow) mainWindow.webContents.send('app-blur');
+  });
+
+  // Power events: resume/suspend/lock/unlock
+  try {
+    powerMonitor.on('resume', () => {
+      if (mainWindow) mainWindow.webContents.send('system-resume');
+    });
+    powerMonitor.on('unlock-screen', () => {
+      if (mainWindow) mainWindow.webContents.send('system-resume');
+    });
+    powerMonitor.on('suspend', () => {
+      if (mainWindow) mainWindow.webContents.send('system-suspend');
+    });
+    powerMonitor.on('lock-screen', () => {
+      if (mainWindow) mainWindow.webContents.send('system-suspend');
+    });
+  } catch (err) {
+    console.warn('Power monitor not available:', err);
+  }
 });
 
 // Ensure app.isQuitting is set on quit (for macOS)
