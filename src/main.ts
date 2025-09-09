@@ -26,6 +26,10 @@ class MIDIController {
   private clockSync: ClockSync;
   private arpeggiator: Arpeggiator;
   private isActive = false;
+  // Tracks whether the app is in its initial async initialization
+  private initializing = true;
+  // Prevents overlapping resume calls
+  private resuming = false;
   private preferredClockInputId: string = 'auto';
   // Momentary arpeggiator rate boost state (Tab key)
   private arpBoostActive: boolean = false;
@@ -60,15 +64,17 @@ class MIDIController {
   private async initialize(): Promise<void> {
     // Initialize MIDI
     this.uiController.updateStatus('Initializing MIDI...', 'info');
+    this.initializing = true;
     
-    const midiReady = await this.midiEngine.initialize();
-    
-    if (midiReady) {
-      this.uiController.updateStatus('MIDI Ready! 🎹', 'success');
-    } else {
-      this.uiController.updateStatus('No MIDI outputs found - Check virtual MIDI port', 'error');
-      this.uiController.showMIDINotAvailable();
-    }
+    try {
+      const midiReady = await this.midiEngine.initialize();
+      
+      if (midiReady) {
+        this.uiController.updateStatus('MIDI Ready! 🎹', 'success');
+      } else {
+        this.uiController.updateStatus('No MIDI outputs found - Check virtual MIDI port', 'error');
+        this.uiController.showMIDINotAvailable();
+      }
 
     // Set up MIDI callbacks
     this.midiEngine.onConnectionChange((connected) => {
@@ -106,8 +112,11 @@ class MIDIController {
     // Initialize UI
     this.updateUI();
 
-    // Mark active after successful init
-    this.isActive = true;
+      // Mark active after successful init
+      this.isActive = true;
+    } finally {
+      this.initializing = false;
+    }
 
     // Populate clock inputs and wire selection
     this.refreshClockInputs();
@@ -741,56 +750,61 @@ class MIDIController {
    * Reinitializes MIDI, reattaches keyboard and clock sync callbacks
    */
   async resume(): Promise<void> {
-    if (this.isActive) return;
+    // Avoid resuming during initial bootstrap or if already active/resuming
+    if (this.isActive || this.initializing || this.resuming) return;
+    this.resuming = true;
     this.uiController.updateStatus('Resuming…', 'info');
+    try {
+      const midiReady = await this.midiEngine.initialize();
 
-    const midiReady = await this.midiEngine.initialize();
+      // Rewire MIDI callbacks (cleanup() clears them)
+      this.midiEngine.onConnectionChange((connected) => {
+        if (connected) {
+          this.uiController.updateStatus('MIDI Connected! 🎹', 'success');
+        } else {
+          this.uiController.updateStatus('MIDI Disconnected', 'error');
+        }
+      });
 
-    // Rewire MIDI callbacks (cleanup() clears them)
-    this.midiEngine.onConnectionChange((connected) => {
-      if (connected) {
-        this.uiController.updateStatus('MIDI Connected! 🎹', 'success');
-      } else {
-        this.uiController.updateStatus('MIDI Disconnected', 'error');
-      }
-    });
+      this.midiEngine.onErrorHandler((error) => {
+        this.uiController.updateStatus(error.message, 'error');
+      });
 
-    this.midiEngine.onErrorHandler((error) => {
-      this.uiController.updateStatus(error.message, 'error');
-    });
+      // Reattach clock sync callbacks for UI and arpeggiator
+      this.setupClockSyncCallbacks();
+      this.arpeggiator.setMidiEngine(this.midiEngine);
+      this.arpeggiator.reattachClockSync();
 
-    // Reattach clock sync callbacks for UI and arpeggiator
-    this.setupClockSyncCallbacks();
-    this.arpeggiator.setMidiEngine(this.midiEngine);
-    this.arpeggiator.reattachClockSync();
+      // Reattach keyboard listeners
+      this.keyboardInput.attach();
 
-    // Reattach keyboard listeners
-    this.keyboardInput.attach();
+      // Refresh UI
+      this.updateUI();
 
-    // Refresh UI
-    this.updateUI();
-
-    // Refresh clock inputs and reselect
-    this.refreshClockInputs();
-    if (this.preferredClockInputId === 'auto') {
-      this.midiEngine.selectBestClockInput();
-    } else {
-      const inputs = this.midiEngine.getAvailableInputs();
-      const found = inputs.find(i => i.id === this.preferredClockInputId);
-      if (found) {
-        this.midiEngine.setInput(found);
-      } else {
+      // Refresh clock inputs and reselect
+      this.refreshClockInputs();
+      if (this.preferredClockInputId === 'auto') {
         this.midiEngine.selectBestClockInput();
-        this.preferredClockInputId = 'auto';
-        this.refreshClockInputs();
+      } else {
+        const inputs = this.midiEngine.getAvailableInputs();
+        const found = inputs.find(i => i.id === this.preferredClockInputId);
+        if (found) {
+          this.midiEngine.setInput(found);
+        } else {
+          this.midiEngine.selectBestClockInput();
+          this.preferredClockInputId = 'auto';
+          this.refreshClockInputs();
+        }
       }
-    }
 
-    if (midiReady) {
-      this.uiController.updateStatus('Resumed and ready! 🎹', 'success');
-      this.isActive = true;
-    } else {
-      this.uiController.updateStatus('MIDI not available after resume', 'error');
+      if (midiReady) {
+        this.uiController.updateStatus('Resumed and ready! 🎹', 'success');
+        this.isActive = true;
+      } else {
+        this.uiController.updateStatus('MIDI not available after resume', 'error');
+      }
+    } finally {
+      this.resuming = false;
     }
   }
 
@@ -898,8 +912,9 @@ document.addEventListener('visibilitychange', () => {
 });
 
   // Handle page show (e.g., bfcache returns)
-  window.addEventListener('pageshow', () => {
-    controller.resume();
+  window.addEventListener('pageshow', (ev: PageTransitionEvent) => {
+    // Only resume on bfcache restores; initial load sends persisted=false
+    if (ev.persisted) controller.resume();
   });
 
   // Stop notes on blur, try resume on focus

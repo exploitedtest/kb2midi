@@ -641,7 +641,7 @@ export class UIController {
     switch (status) {
       case 'synced':
         icon = '🟢';
-        text = bpm ? `Synced to DAW (${Math.round(bpm / 2)} BPM)` : 'Synced to DAW';
+        text = bpm ? `Synced to DAW (${Math.round(bpm)} BPM)` : 'Synced to DAW';
         className = 'clock-status synced';
         break;
       case 'free':

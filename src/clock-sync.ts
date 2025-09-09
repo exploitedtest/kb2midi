@@ -22,13 +22,15 @@ export class ClockSync {
   private readonly MAX_INTERVALS = 10;
   private stopTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly STOP_TIMEOUT_MS = 500; // consider stopped if no clock for 0.5s
+  // Drop implausibly fast duplicate ticks (e.g., burst duplicates from drivers)
+  private readonly MIN_TICK_INTERVAL_MS = 3; // ~833 BPM ceiling per MIDI clock tick
 
   /**
    * Handles incoming MIDI clock tick (0xF8)
    * Calculates BPM and triggers timing events
    */
-  onMIDIClockTick(): void {
-    const now = performance.now();
+  onMIDIClockTick(nowArg?: number): void {
+    const now = typeof nowArg === 'number' ? nowArg : performance.now();
     
     // If ticks arrive without explicit Start/Continue, consider clock running
     if (!this.state.isRunning) {
@@ -39,6 +41,12 @@ export class ClockSync {
 
     if (this.state.lastTickTime > 0) {
       const tickInterval = now - this.state.lastTickTime;
+
+      // Filter out unrealistically fast intervals which indicate duplicate delivery
+      if (tickInterval < this.MIN_TICK_INTERVAL_MS) {
+        this.state.lastTickTime = now;
+        return;
+      }
       this.tickIntervals.push(tickInterval);
       
       if (this.tickIntervals.length > this.MAX_INTERVALS) {
