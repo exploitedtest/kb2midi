@@ -156,7 +156,13 @@ export class MIDIEngine {
     // Final fallback to first available input
     chosen = chosen || inputs[0];
 
+    // If switching inputs, detach listener from previous one first to avoid duplicate ticks
+    if (this.state.midiInput && this.state.midiInput !== chosen) {
+      try { this.state.midiInput.onmidimessage = null; } catch {}
+    }
+
     this.state.midiInput = chosen;
+    // Reassign handler idempotently (safe even if same input)
     this.state.midiInput.onmidimessage = this.handleMIDIMessage;
 
     console.log(`MIDI Input connected: ${this.state.midiInput.name || 'Unknown'}`);
@@ -167,7 +173,7 @@ export class MIDIEngine {
    * Allows manual selection of MIDI input (e.g., from UI)
    */
   setInput(input: WebMidi.MIDIInput): void {
-    if (this.state.midiInput) {
+    if (this.state.midiInput && this.state.midiInput !== input) {
       this.state.midiInput.onmidimessage = null;
     }
     this.state.midiInput = input;
@@ -208,6 +214,7 @@ export class MIDIEngine {
       
       // MIDI Clock (0xF8)
       if (status === 0xF8) {
+        // Use high-resolution monotonic clock inside ClockSync
         this.clockSync.onMIDIClockTick();
       }
       
