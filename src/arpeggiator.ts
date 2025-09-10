@@ -223,9 +223,9 @@ export class Arpeggiator {
    */
   private calculateGateTime(): number {
     const bpm = this.clockSync.getBPM();
-    const beatTime = (60 / bpm) * 1000; // ms per beat
-    const sixteenthTime = beatTime / 4; // ms per sixteenth note
-    return sixteenthTime * this.state.gateLength;
+    const beatTime = (60 / bpm) * 1000; // ms per quarter note
+    const stepTime = beatTime / this.state.clockDivisor; // duration of one step
+    return stepTime * this.state.gateLength;
   }
 
   /**
