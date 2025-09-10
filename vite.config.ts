@@ -15,7 +15,8 @@ export default defineConfig({
   },
   server: {
     port: 8080,
-    open: true
+    open: process.env.ELECTRON ? false : true,
+    strictPort: true
   },
   resolve: {
     alias: {

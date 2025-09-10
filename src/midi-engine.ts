@@ -6,8 +6,7 @@ import {
   MIDI_CC,
   MIDI_PROGRAM_CHANGE,
   MIDI_PITCH_BEND,
-  MIDI_SUSTAIN_PEDAL,
-  getMIDINoteName
+  MIDI_SUSTAIN_PEDAL
 } from './types';
 import { ClockSync } from './clock-sync';
 
@@ -32,11 +31,35 @@ export class MIDIEngine {
   private onStateChange?: (connected: boolean) => void;
   private onError?: (error: Error) => void;
   private onClockSyncChange?: (status: 'synced' | 'free' | 'stopped') => void;
+  private onPortsChange?: () => void;
+  
+  // Pre-validation cache for performance
+  private validChannels = new Set<number>();
+  private validNotes = new Set<number>();
+  private validVelocities = new Set<number>();
 
   constructor(clockSync: ClockSync) {
     this.clockSync = clockSync;
     this.handleMIDIStateChange = this.handleMIDIStateChange.bind(this);
     this.handleMIDIMessage = this.handleMIDIMessage.bind(this);
+    this.initializeValidationCache();
+  }
+
+  /**
+   * Pre-populates validation caches to avoid repeated bounds checking
+   * Significant performance improvement for high-frequency note events
+   */
+  private initializeValidationCache(): void {
+    // Pre-populate valid MIDI channels (1-16)
+    for (let i = 1; i <= 16; i++) {
+      this.validChannels.add(i);
+    }
+    
+    // Pre-populate valid MIDI notes (0-127)
+    for (let i = 0; i <= 127; i++) {
+      this.validNotes.add(i);
+      this.validVelocities.add(i);
+    }
   }
 
   /**
@@ -74,13 +97,29 @@ export class MIDIEngine {
   private handleMIDIStateChange(event: WebMidi.MIDIConnectionEvent): void {
     console.log(`MIDI device ${event.port.name} ${event.port.state}`);
     
-    if (event.port.type === 'output' && event.port.state === 'disconnected' && 
-        event.port.id === this.state.midiOutput?.id) {
-      this.state.isConnected = false;
-      this.state.midiOutput = null;
-      this.onStateChange?.(false);
-      this.autoSelectOutput();
+    if (event.port.type === 'output') {
+      if (event.port.state === 'disconnected' && event.port.id === this.state.midiOutput?.id) {
+        this.state.isConnected = false;
+        this.state.midiOutput = null;
+        this.onStateChange?.(false);
+        this.autoSelectOutput();
+      } else if (event.port.state === 'connected' && !this.state.midiOutput) {
+        this.autoSelectOutput();
+      }
     }
+
+    if (event.port.type === 'input') {
+      // If our current input disappeared, pick a new best input
+      if (event.port.state === 'disconnected' && event.port.id === this.state.midiInput?.id) {
+        this.state.midiInput.onmidimessage = null;
+        this.state.midiInput = null;
+        // Reselect best available input
+        this.setupMIDIInput();
+      }
+    }
+
+    // Notify about port list changes so UI can refresh dropdown
+    this.onPortsChange?.();
   }
 
   /**
@@ -97,12 +136,72 @@ export class MIDIEngine {
       return true; // Not critical for basic functionality
     }
 
-    // Try to find DAW output (usually the first input)
-    this.state.midiInput = inputs[0];
+    // Prefer input matching currently selected output's name
+    const targetName = this.state.midiOutput?.name?.toLowerCase();
+    let chosen: WebMidi.MIDIInput | undefined;
+    if (targetName) {
+      chosen = inputs.find(inp => inp.name?.toLowerCase() === targetName);
+      if (!chosen) {
+        // Fallback to contains for variants like "(Bus 1)"
+        chosen = inputs.find(inp => inp.name?.toLowerCase().includes(targetName));
+      }
+    }
+
+    // Fallback heuristics for common virtual ports
+    if (!chosen) {
+      const candidates = ['iac', 'loopmidi', 'yoke', 'midi'];
+      chosen = inputs.find(inp => candidates.some(c => inp.name?.toLowerCase().includes(c)));
+    }
+
+    // Final fallback to first available input
+    chosen = chosen || inputs[0];
+
+    // If switching inputs, detach listener from previous one first to avoid duplicate ticks
+    if (this.state.midiInput && this.state.midiInput !== chosen) {
+      try { this.state.midiInput.onmidimessage = null; } catch {}
+    }
+
+    this.state.midiInput = chosen;
+    // Reassign handler idempotently (safe even if same input)
     this.state.midiInput.onmidimessage = this.handleMIDIMessage;
-    
+
     console.log(`MIDI Input connected: ${this.state.midiInput.name || 'Unknown'}`);
     return true;
+  }
+
+  /**
+   * Allows manual selection of MIDI input (e.g., from UI)
+   */
+  setInput(input: WebMidi.MIDIInput): void {
+    if (this.state.midiInput && this.state.midiInput !== input) {
+      this.state.midiInput.onmidimessage = null;
+    }
+    this.state.midiInput = input;
+    this.state.midiInput.onmidimessage = this.handleMIDIMessage;
+    console.log(`Switched MIDI Input to: ${input.name || 'Unknown'}`);
+  }
+
+  /**
+   * Returns available MIDI inputs
+   */
+  getAvailableInputs(): WebMidi.MIDIInput[] {
+    if (!this.state.midiAccess) return [];
+    return Array.from(this.state.midiAccess.inputs.values());
+  }
+
+  /**
+   * Select the best available clock input using internal heuristics
+   */
+  selectBestClockInput(): void {
+    if (!this.state.midiAccess) return;
+    this.setupMIDIInput();
+  }
+
+  /**
+   * Subscribe to port changes (inputs/outputs added/removed)
+   */
+  onPortsChangeHandler(callback: () => void): void {
+    this.onPortsChange = callback;
   }
 
   /**
@@ -115,6 +214,7 @@ export class MIDIEngine {
       
       // MIDI Clock (0xF8)
       if (status === 0xF8) {
+        // Use high-resolution monotonic clock inside ClockSync
         this.clockSync.onMIDIClockTick();
       }
       
@@ -202,8 +302,8 @@ export class MIDIEngine {
       return;
     }
 
-    // Validate message parameters
-    if (message.channel < 1 || message.channel > 16) {
+    // Fast validation using pre-computed cache
+    if (!this.validChannels.has(message.channel)) {
       console.error(`Invalid MIDI channel: ${message.channel}`);
       return;
     }
@@ -212,25 +312,24 @@ export class MIDIEngine {
     
     switch (message.type) {
       case 'noteon':
-        if (message.note === undefined || message.note < 0 || message.note > 127) {
+        if (message.note === undefined || !this.validNotes.has(message.note)) {
           console.error(`Invalid MIDI note: ${message.note}`);
           return;
         }
-        if (message.velocity === undefined || message.velocity < 0 || message.velocity > 127) {
+        if (message.velocity === undefined || !this.validVelocities.has(message.velocity)) {
           console.error(`Invalid MIDI velocity: ${message.velocity}`);
           return;
         }
         data = [MIDI_NOTE_ON | (message.channel - 1), message.note, message.velocity];
         this.activeNotes.add(message.note);
-        console.log(`Note ON: ${getMIDINoteName(message.note)} (${message.note}) vel:${message.velocity}`);
         break;
         
       case 'noteoff':
-        if (message.note === undefined || message.note < 0 || message.note > 127) {
+        if (message.note === undefined || !this.validNotes.has(message.note)) {
           console.error(`Invalid MIDI note: ${message.note}`);
           return;
         }
-        if (message.velocity === undefined || message.velocity < 0 || message.velocity > 127) {
+        if (message.velocity === undefined || !this.validVelocities.has(message.velocity)) {
           console.error(`Invalid MIDI velocity: ${message.velocity}`);
           return;
         }
@@ -240,7 +339,6 @@ export class MIDIEngine {
         } else {
           this.sustainedNotes.add(message.note);
         }
-        console.log(`Note OFF: ${getMIDINoteName(message.note)} (${message.note})`);
         break;
         
       case 'cc':
@@ -289,16 +387,16 @@ export class MIDIEngine {
    * @param channel - MIDI channel (1-16)
    */
   playNote(note: number, velocity: number, channel: number): void {
-    // Validate parameters before sending
-    if (note === undefined || note === null || note < 0 || note > 127) {
+    // Fast validation using pre-computed caches
+    if (note === undefined || note === null || !this.validNotes.has(note)) {
       console.error(`Invalid note in playNote: ${note} (type: ${typeof note})`);
       return;
     }
-    if (velocity === undefined || velocity === null || velocity < 0 || velocity > 127) {
+    if (velocity === undefined || velocity === null || !this.validVelocities.has(velocity)) {
       console.error(`Invalid velocity in playNote: ${velocity} (type: ${typeof velocity})`);
       return;
     }
-    if (channel === undefined || channel === null || channel < 1 || channel > 16) {
+    if (channel === undefined || channel === null || !this.validChannels.has(channel)) {
       console.error(`Invalid channel in playNote: ${channel} (type: ${typeof channel})`);
       return;
     }

@@ -4,6 +4,14 @@ import { ClockSync } from './clock-sync';
 /**
  * Arpeggiator that syncs to external MIDI clock
  * Generates arpeggio patterns based on held notes and external timing
+ * 
+ * NEW FEATURE: Sliding Window Mode
+ * - notesPerStep: Controls how many notes play per tick
+ *   - 1 = Traditional single-note arpeggiator
+ *   - 2+ = Sliding window (plays multiple adjacent notes)
+ * - slidingOverlap: Controls window movement
+ *   - true = Window slides by 1 (overlapping)
+ *   - false = Window jumps by notesPerStep (non-overlapping)
  */
 export class Arpeggiator {
   private state: ArpeggiatorState = {
@@ -16,14 +24,20 @@ export class Arpeggiator {
     noteOrder: [],
     currentStep: 0,
     syncToClock: true,
-    clockDivisor: 4 // 16th notes by default
+    clockDivisor: 4, // 16th notes by default
+    notesPerStep: 1, // NEW: How many notes to play per tick (1 = traditional)
+    slidingOverlap: true // NEW: If true, window slides by 1; if false, jumps by notesPerStep
   };
 
-  private heldNotes: number[] = [];
+  private pressOrder: number[] = []; // Maintains the order in which notes were pressed
   private clockSync: ClockSync;
   private midiEngine: IMidiEngine | null = null;
   private onStepCallbacks: ((step: number, note: number) => void)[] = [];
   private activeTimeouts: Set<ReturnType<typeof setTimeout>> = new Set();
+  private heldNoteTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private lastProcessedTick: number = -1;
+  private getChannel: (() => number) | null = null;
+  private getVelocity: (() => number) | null = null;
 
   constructor(clockSync: ClockSync) {
     this.clockSync = clockSync;
@@ -31,43 +45,41 @@ export class Arpeggiator {
   }
 
   /**
-   * Sets up clock sync event handlers
+   * Simplified clock sync setup - clock manages both playing AND stepping
    */
   private setupClockSync(): void {
-    // Use tick-based sync for proper clock division
     this.clockSync.onTick(() => {
+      const currentTick = this.clockSync.getTicks();
+    
+      // De-duplicate ticks in case multiple listeners are attached
+      if (currentTick === this.lastProcessedTick) {
+        return;
+      }
+      this.lastProcessedTick = currentTick;
+    
       if (this.state.enabled && this.state.syncToClock) {
-        // Calculate ticks per step based on clock divisor
-        // clockDivisor: 1=quarter, 2=8th, 4=16th, 8=32nd
         const ticksPerStep = Math.floor(24 / this.state.clockDivisor);
-        
-        // Apply swing by alternating step timing
-        const currentTick = this.clockSync.getTicks();
-        const stepInDivision = Math.floor(currentTick / ticksPerStep);
-        const isSwingStep = stepInDivision % 2 === 1; // Every other step
-        
-        let shouldPlay = currentTick % ticksPerStep === 0;
-        
-        // Apply swing delay to off-beat steps
-        if (this.state.swing > 0 && isSwingStep) {
-          // 0.25 = max 25% delay for swing feel (typical swing range)
-          const swingDelay = Math.floor(ticksPerStep * this.state.swing * 0.25);
-          shouldPlay = (currentTick + swingDelay) % ticksPerStep === 0;
-        }
-        
-        if (shouldPlay) {
+        if (currentTick % ticksPerStep === 0) {
+          // Clock handles the sequence
           this.playCurrentStep();
           this.advanceStep();
         }
       }
     });
 
-    // Reset on start
     this.clockSync.onStart(() => {
       if (this.state.enabled) {
         this.state.currentStep = 0;
+        this.lastProcessedTick = -1;
       }
     });
+  }
+
+  /**
+   * Re-attaches clock sync event handlers after a clock callback reset
+   */
+  reattachClockSync(): void {
+    this.setupClockSync();
   }
 
   /**
@@ -78,6 +90,14 @@ export class Arpeggiator {
   }
 
   /**
+   * Inject getters to fetch live channel/velocity from UI
+   */
+  setParamGetters(getChannel: () => number, getVelocity: () => number): void {
+    this.getChannel = getChannel;
+    this.getVelocity = getVelocity;
+  }
+
+  /**
    * Enables or disables the arpeggiator
    */
   setEnabled(enabled: boolean): void {
@@ -85,6 +105,7 @@ export class Arpeggiator {
     if (!enabled) {
       this.clearAllTimeouts();
       this.stopAllNotes();
+      this.state.currentStep = 0;
     }
   }
 
@@ -92,8 +113,11 @@ export class Arpeggiator {
    * Sets the arpeggiator pattern
    */
   setPattern(pattern: ArpeggiatorPattern): void {
-    this.state.pattern = pattern;
-    this.updateNoteOrder();
+    if (this.state.pattern !== pattern) {
+      this.state.pattern = pattern;
+      this.updateNoteOrder();
+      this.state.currentStep = 0;
+    }
   }
 
   /**
@@ -126,95 +150,216 @@ export class Arpeggiator {
   }
 
   /**
-   * Sets the held notes for the arpeggio
+   * Sets the number of notes to play per step (sliding window size)
+   * @param notesPerStep - Number of notes to play simultaneously (1 = traditional arpeggiator)
+   */
+  setNotesPerStep(notesPerStep: number): void {
+    this.state.notesPerStep = Math.max(1, Math.floor(notesPerStep));
+  }
+
+  /**
+   * Sets whether the sliding window overlaps or jumps
+   * @param overlap - If true, window slides by 1; if false, window jumps by notesPerStep
+   */
+  setSlidingWindowOverlap(overlap: boolean): void {
+    this.state.slidingOverlap = overlap;
+  }
+
+  /**
+   * Sets the held notes for the arpeggio (legacy method for compatibility)
    */
   setNotes(notes: number[]): void {
-    this.heldNotes = [...notes];
+    this.pressOrder = [...notes];
     this.updateNoteOrder();
   }
 
   /**
-   * Updates the note order based on pattern and held notes
+   * Adds a note to the arpeggio in press order
+   */
+  addNote(note: number): void {
+    if (this.pressOrder.includes(note)) return;
+    this.pressOrder.push(note);
+    this.updateNoteOrder();
+  }
+
+  /**
+   * Removes a note from the arpeggio while preserving press order
+   */
+  removeNote(note: number): void {
+    const index = this.pressOrder.indexOf(note);
+    if (index !== -1) {
+      this.pressOrder.splice(index, 1);
+      this.updateNoteOrder();
+    }
+  }
+
+  /**
+   * Clears all held notes and resets the sequence
+   */
+  clearNotes(): void {
+    this.pressOrder = [];
+    this.state.noteOrder = [];
+    this.state.currentStep = 0;
+  }
+
+  /**
+   * SIMPLIFIED: Just plays the current step - no advancement logic
+   * NEW: Supports sliding window with notesPerStep parameter
+   */
+  private playCurrentStep(): void {
+    if (this.state.noteOrder.length === 0) return;
+
+    try {
+      if (!this.midiEngine) {
+        console.warn('MIDI engine not connected to arpeggiator');
+        return;
+      }
+
+      const channel = this.getChannel ? this.getChannel() : 1;
+      const velocity = this.getVelocity ? this.getVelocity() : 80;
+      const stepTimeMs = this.getStepTimeMs();
+      const gateTime = Math.min(this.calculateGateTime(), Math.max(0, stepTimeMs - 2)); // leave a tiny headroom to avoid overlap
+
+      if (this.state.pattern === 'chord' || this.state.pattern === 'stacked-chord') {
+        // Chord modes: play ALL notes simultaneously (ignores notesPerStep)
+        const notesToPlay = this.state.pattern === 'chord'
+          ? [...this.state.noteOrder]
+          : this.getStackedChordNotes();
+
+        notesToPlay.forEach(note => {
+          this.playNoteWithGate(note, velocity, channel, gateTime);
+          this.onStepCallbacks.forEach(callback => {
+            try {
+              callback(this.state.currentStep, note);
+            } catch (error) {
+              console.error('Error in arpeggiator step callback:', error);
+            }
+          });
+        });
+        
+      } else {
+        // Pattern modes: play notesPerStep notes at a time (sliding window)
+        const notesToPlay: number[] = [];
+        const sequenceLength = this.state.noteOrder.length;
+        
+        // Collect notesPerStep notes starting from currentStep
+        for (let i = 0; i < this.state.notesPerStep && i < sequenceLength; i++) {
+          const noteIndex = (this.state.currentStep + i) % sequenceLength;
+          notesToPlay.push(this.state.noteOrder[noteIndex]);
+        }
+
+        // Play all notes in the window
+        notesToPlay.forEach(note => {
+          this.playNoteWithGate(note, velocity, channel, gateTime);
+
+          this.onStepCallbacks.forEach(callback => {
+            try {
+              callback(this.state.currentStep, note);
+            } catch (error) {
+              console.error('Error in arpeggiator step callback:', error);
+            }
+          });
+        });
+      }
+    } catch (error) {
+      console.error('Error playing arpeggiator step:', error);
+    }
+  }
+
+  /**
+   * Build stacked chord notes from noteOrder
+   */
+  private getStackedChordNotes(): number[] {
+    const baseNotes = this.state.pattern === 'timeline' 
+      ? [...this.pressOrder]
+      : [...this.pressOrder].sort((a, b) => a - b);
+      
+    const layers = [-12, 0, 12];
+    const seen = new Set<number>();
+    const result: number[] = [];
+    
+    baseNotes.forEach(base => {
+      layers.forEach(off => {
+        const n = base + off;
+        if (n >= 0 && n <= 127 && !seen.has(n)) {
+          seen.add(n);
+          result.push(n);
+        }
+      });
+    });
+    
+    return result;
+  }
+
+  /**
+   * Updates the note order based on pattern
+   * FIXED: Always ensures currentStep is valid
    */
   private updateNoteOrder(): void {
-    if (this.heldNotes.length === 0) {
+    if (this.pressOrder.length === 0) {
       this.state.noteOrder = [];
+      this.state.currentStep = 0;
       return;
     }
 
-    const notes: number[] = [];
+    let baseNotes: number[];
+    
+    if (this.state.pattern === 'timeline') {
+      baseNotes = [...this.pressOrder];
+    } else {
+      baseNotes = [...this.pressOrder].sort((a, b) => a - b);
+    }
     
     // Generate notes for each octave
+    const notes: number[] = [];
     for (let octave = 0; octave < this.state.octaveRange; octave++) {
-      this.heldNotes.forEach(note => {
-        notes.push(note + (octave * 12));
+      baseNotes.forEach(note => {
+        const n = note + (octave * 12);
+        if (n >= 0 && n <= 127) notes.push(n);
       });
     }
 
-    // Apply pattern
+    // Apply pattern transformations
     switch (this.state.pattern) {
+      case 'timeline':
+        this.state.noteOrder = [...notes];
+        break;
       case 'up':
         this.state.noteOrder = [...notes];
         break;
       case 'down':
         this.state.noteOrder = [...notes].reverse();
         break;
-      case 'up-down':
-        this.state.noteOrder = [...notes, ...notes.slice(0, -1).reverse()];
+      case 'up-down': {
+        if (notes.length <= 1) {
+          this.state.noteOrder = [...notes];
+        } else {
+          // Ascend fully, then descend excluding the first and last endpoints to prevent duplicates at wrap
+          this.state.noteOrder = [...notes, ...notes.slice(1, -1).reverse()];
+        }
         break;
-      case 'down-up':
-        this.state.noteOrder = [...notes].reverse().concat(notes.slice(1));
+      }
+      case 'down-up': {
+        if (notes.length <= 1) {
+          this.state.noteOrder = [...notes];
+        } else {
+          // Descend fully, then ascend excluding the first and last endpoints to prevent duplicates at wrap
+          this.state.noteOrder = [...notes].reverse().concat(notes.slice(1, -1));
+        }
         break;
+      }
       case 'random':
         this.state.noteOrder = [...notes].sort(() => Math.random() - 0.5);
         break;
       case 'chord':
+      case 'stacked-chord':
         this.state.noteOrder = notes;
         break;
     }
-  }
 
-  /**
-   * Plays the current step of the arpeggio
-   */
-  private playCurrentStep(): void {
-    if (this.state.noteOrder.length === 0) return;
-
-    try {
-      const note = this.state.noteOrder[this.state.currentStep % this.state.noteOrder.length];
-      
-      if (!this.midiEngine) {
-        console.warn('MIDI engine not connected to arpeggiator');
-        return;
-      }
-
-      this.midiEngine.playNote(note, 80, 1); // Default velocity and channel
-
-      // Trigger callbacks
-      this.onStepCallbacks.forEach(callback => {
-        try {
-          callback(this.state.currentStep, note);
-        } catch (error) {
-          console.error('Error in arpeggiator step callback:', error);
-        }
-      });
-
-      // Schedule note off based on gate length
-      const gateTime = this.calculateGateTime();
-      const timeout = setTimeout(() => {
-        this.activeTimeouts.delete(timeout);
-        try {
-          if (this.midiEngine && this.state.enabled) {
-            this.midiEngine.stopNote(note, 0, 1);
-          }
-        } catch (error) {
-          console.error('Error stopping arpeggiator note:', error);
-        }
-      }, gateTime);
-      
-      this.activeTimeouts.add(timeout);
-    } catch (error) {
-      console.error('Error playing arpeggiator step:', error);
+    // Ensure currentStep is always valid
+    if (this.state.noteOrder.length > 0 && this.state.currentStep >= this.state.noteOrder.length) {
+      this.state.currentStep = this.state.currentStep % this.state.noteOrder.length;
     }
   }
 
@@ -224,75 +369,158 @@ export class Arpeggiator {
   private calculateGateTime(): number {
     const bpm = this.clockSync.getBPM();
     const beatTime = (60 / bpm) * 1000; // ms per quarter note
-    const stepTime = beatTime / this.state.clockDivisor; // duration of one step
+    const stepTime = beatTime / this.state.clockDivisor;
     return stepTime * this.state.gateLength;
   }
 
-  /**
-   * Advances to the next step
-   */
-  private advanceStep(): void {
-    this.state.currentStep++;
+/**
+ * Returns the duration (ms) of a single step at the current tempo/division
+ */
+private getStepTimeMs(): number {
+  const bpm = this.clockSync.getBPM();
+  const beatTime = (60 / bpm) * 1000; // ms per quarter note
+  return beatTime / this.state.clockDivisor;
+}
+
+/**
+ * Plays a single note and ensures it is stopped correctly on the same channel.
+ * Also prevents overlaps by force-stopping a previous instance of the same note/channel
+ * before retriggering, and tracks the timeout so it can be cancelled later.
+ */
+private playNoteWithGate(note: number, velocity: number, channel: number, gateTime: number): void {
+  const key = `${note}:${channel}`;
+
+  // If this note is already gated on this channel, stop it before retriggering
+  const existing = this.heldNoteTimeouts.get(key);
+  if (existing) {
+    clearTimeout(existing);
+    this.activeTimeouts.delete(existing);
+    this.heldNoteTimeouts.delete(key);
+    try {
+      if (this.midiEngine) {
+        this.midiEngine.stopNote(note, 0, channel);
+      }
+    } catch (error) {
+      console.error('Error force-stopping active note:', error);
+    }
   }
 
-  /**
-   * Stops all currently playing arpeggio notes
-   */
-  private stopAllNotes(): void {
-    if (!this.midiEngine) return;
-    
-    this.state.noteOrder.forEach(note => {
-      this.midiEngine!.stopNote(note, 0, 1);
+  // Start note
+  this.midiEngine!.playNote(note, velocity, channel);
+
+  // Schedule stop on the same channel (no re-fetching the channel)
+  const timeout = setTimeout(() => {
+    this.activeTimeouts.delete(timeout);
+    this.heldNoteTimeouts.delete(key);
+    try {
+      if (this.midiEngine && this.state.enabled) {
+        this.midiEngine.stopNote(note, 0, channel);
+      }
+    } catch (error) {
+      console.error('Error stopping arpeggiator note:', error);
+    }
+  }, gateTime);
+  this.activeTimeouts.add(timeout);
+  this.heldNoteTimeouts.set(key, timeout);
+}
+
+/**
+ * Advances to the next step in the sequence
+ * NEW: Supports both overlapping and non-overlapping sliding windows
+ */
+private advanceStep(): void {
+  if (this.state.noteOrder.length === 0) return;
+
+  // Determine step increment based on sliding window mode
+  const stepIncrement = this.state.slidingOverlap ? 1 : this.state.notesPerStep;
+  this.state.currentStep = (this.state.currentStep + stepIncrement) % this.state.noteOrder.length;
+}
+
+/**
+ * Stops all currently playing notes
+ */
+private stopAllNotes(): void {
+  this.heldNoteTimeouts.clear();
+  if (!this.midiEngine) return;
+
+  const channel = this.getChannel ? this.getChannel() : 1;
+  // Stop all possible MIDI notes to ensure nothing is left hanging
+  for (let note = 0; note <= 127; note++) {
+    this.midiEngine.stopNote(note, 0, channel);
+  }
+}
+
+/**
+ * Clears all active timeouts
+ */
+private clearAllTimeouts(): void {
+  // Cancel scheduled note-off events
+  this.activeTimeouts.forEach(timeout => clearTimeout(timeout));
+  this.activeTimeouts.clear();
+
+  // Immediately stop any notes that are still held (across all channels we started)
+  if (this.midiEngine) {
+    this.heldNoteTimeouts.forEach((_, key) => {
+      const [noteStr, chStr] = key.split(':');
+      const note = Number(noteStr);
+      const channel = Number(chStr);
+      try {
+        this.midiEngine?.stopNote(note, 0, channel);
+      } catch (error) {
+        console.error('Error force-stopping note during timeout clear:', error);
+      }
     });
   }
+  this.heldNoteTimeouts.clear();
 
-  /**
-   * Clears all active timeouts to prevent memory leaks
-   */
-  private clearAllTimeouts(): void {
-    this.activeTimeouts.forEach(timeout => clearTimeout(timeout));
-    this.activeTimeouts.clear();
-  }
+}
 
-  /**
-   * Gets the current arpeggiator state
-   */
-  getState(): ArpeggiatorState {
-    return { ...this.state };
-  }
+/**
+ * Gets the current arpeggiator state
+ */
+getState(): ArpeggiatorState {
+  return { ...this.state };
+}
 
-  /**
-   * Gets the current step
-   */
-  getCurrentStep(): number {
-    return this.state.currentStep;
-  }
+/**
+ * Gets the current step
+ */
+getCurrentStep(): number {
+  return this.state.currentStep;
+}
 
-  /**
-   * Gets the current note order
-   */
-  getNoteOrder(): number[] {
-    return [...this.state.noteOrder];
-  }
+/**
+ * Gets the current note order
+ */
+getNoteOrder(): number[] {
+  return [...this.state.noteOrder];
+}
 
-  /**
-   * Checks if arpeggiator is enabled
-   */
-  isEnabled(): boolean {
-    return this.state.enabled;
-  }
+/**
+ * Gets the current number of notes per step
+ */
+getNotesPerStep(): number {
+  return this.state.notesPerStep;
+}
 
-  /**
-   * Registers a callback for step events
-   */
-  onStep(callback: (step: number, note: number) => void): void {
-    this.onStepCallbacks.push(callback);
-  }
+/**
+ * Checks if arpeggiator is enabled
+ */
+isEnabled(): boolean {
+  return this.state.enabled;
+}
 
-  /**
-   * Removes all step callbacks
-   */
-  clearStepCallbacks(): void {
-    this.onStepCallbacks = [];
-  }
-} 
+/**
+ * Registers a callback for step events
+ */
+onStep(callback: (step: number, note: number) => void): void {
+  this.onStepCallbacks.push(callback);
+}
+
+/**
+ * Removes all step callbacks
+ */
+clearStepCallbacks(): void {
+  this.onStepCallbacks = [];
+}
+}

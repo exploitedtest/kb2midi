@@ -20,16 +20,33 @@ export class ClockSync {
   private onStopCallbacks: (() => void)[] = [];
   private tickIntervals: number[] = [];
   private readonly MAX_INTERVALS = 10;
+  private stopTimeout: ReturnType<typeof setTimeout> | null = null;
+  private readonly STOP_TIMEOUT_MS = 500; // consider stopped if no clock for 0.5s
+  // Drop implausibly fast duplicate ticks (e.g., burst duplicates from drivers)
+  private readonly MIN_TICK_INTERVAL_MS = 3; // ~833 BPM ceiling per MIDI clock tick
 
   /**
    * Handles incoming MIDI clock tick (0xF8)
    * Calculates BPM and triggers timing events
    */
-  onMIDIClockTick(): void {
-    const now = performance.now();
+  onMIDIClockTick(nowArg?: number): void {
+    const now = typeof nowArg === 'number' ? nowArg : performance.now();
     
+    // If ticks arrive without explicit Start/Continue, consider clock running
+    if (!this.state.isRunning) {
+      this.state.isRunning = true;
+      this.state.status = 'synced';
+      this.onStartCallbacks.forEach(callback => callback());
+    }
+
     if (this.state.lastTickTime > 0) {
       const tickInterval = now - this.state.lastTickTime;
+
+      // Filter out unrealistically fast intervals which indicate duplicate delivery
+      if (tickInterval < this.MIN_TICK_INTERVAL_MS) {
+        this.state.lastTickTime = now;
+        return;
+      }
       this.tickIntervals.push(tickInterval);
       
       if (this.tickIntervals.length > this.MAX_INTERVALS) {
@@ -46,7 +63,7 @@ export class ClockSync {
     
     this.state.lastTickTime = now;
     this.state.ticks++;
-    
+
     // Trigger tick callbacks
     this.onTickCallbacks.forEach(callback => callback());
     
@@ -59,6 +76,16 @@ export class ClockSync {
     if (this.state.ticks % 6 === 0) {
       this.onSixteenthNoteCallbacks.forEach(callback => callback());
     }
+
+    // Reset stop timeout on each tick
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+    }
+    this.stopTimeout = setTimeout(() => {
+      this.state.isRunning = false;
+      this.state.status = 'stopped';
+      this.onStopCallbacks.forEach(callback => callback());
+    }, this.STOP_TIMEOUT_MS);
   }
 
   /**
@@ -82,6 +109,10 @@ export class ClockSync {
   onMIDIStop(): void {
     this.state.isRunning = false;
     this.state.status = 'stopped';
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+      this.stopTimeout = null;
+    }
     
     this.onStopCallbacks.forEach(callback => callback());
   }
@@ -93,6 +124,10 @@ export class ClockSync {
   onMIDIContinue(): void {
     this.state.isRunning = true;
     this.state.status = 'synced';
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+      this.stopTimeout = null;
+    }
     
     this.onStartCallbacks.forEach(callback => callback());
   }

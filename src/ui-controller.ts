@@ -24,13 +24,26 @@ export class UIController {
   private midiChannelSelect: HTMLSelectElement;
   private layoutSelect: HTMLSelectElement;
   private clockStatusElement: HTMLElement;
+  private midiClockInputSelect: HTMLSelectElement | null = null;
   private beatIndicatorTimeout?: ReturnType<typeof setTimeout>; // Store timeout to prevent overlapping pulses
+  private modIndicator: HTMLElement | null = null;
+  private pitchIndicator: HTMLElement | null = null;
+  private octaveDownIndicator: HTMLElement | null = null;
+  private octaveUpIndicator: HTMLElement | null = null;
   
   private activeKeys = new Map<number, HTMLElement>();
   private keyElements = new Map<string, HTMLElement>();
   
   // Unified control registry
   private controls = new Map<string, UIControl>();
+  
+  // Velocity change handlers
+  private onVelocityChangeHandlers: ((velocity: number) => void)[] = [];
+  
+  // UI update batching for performance
+  private pendingPianoUpdates = new Map<number, boolean>();
+  private pendingKeyVisualUpdates = new Map<string, boolean>();
+  private updateScheduled = false;
 
   constructor() {
     this.pianoContainer = document.getElementById('piano')!;
@@ -41,8 +54,14 @@ export class UIController {
     this.midiChannelSelect = document.getElementById('midi-channel') as HTMLSelectElement;
     this.layoutSelect = document.getElementById('layout-select') as HTMLSelectElement;
     this.clockStatusElement = document.getElementById('clock-status')!;
+    this.midiClockInputSelect = document.getElementById('midi-clock-input') as HTMLSelectElement | null;
+    this.modIndicator = document.getElementById('mod-indicator');
+    this.pitchIndicator = document.getElementById('pitch-indicator');
+    this.octaveDownIndicator = document.getElementById('octave-down-indicator');
+    this.octaveUpIndicator = document.getElementById('octave-up-indicator');
     this.createClockStatusElement();
     this.setupUIEventListeners();
+    this.setupButtonPressEffects();
     this.initializeControls();
   }
 
@@ -74,12 +93,15 @@ export class UIController {
    * Sets up UI event listeners using the unified control system
    */
   private setupUIEventListeners(): void {
-    // Wire up velocity control with display update
+    // Wire up velocity control with display update and change notification
     this.wireControl({
       id: 'velocity',
       type: 'range',
       setter: (value) => {
         this.velocitySlider.value = value;
+        // Notify velocity change handlers
+        const numValue = parseInt(value);
+        this.onVelocityChangeHandlers.forEach(handler => handler(numValue));
       },
       getter: () => this.velocitySlider.value,
       displayId: 'velocity-value',
@@ -97,6 +119,60 @@ export class UIController {
   }
 
   /**
+   * Sets up press-and-hold visual effects for buttons
+   * Provides immediate visual feedback with green glow and scaling
+   */
+  private setupButtonPressEffects(): void {
+    const buttons = document.querySelectorAll('button');
+    
+    buttons.forEach((button) => {
+      let isPressed = false;
+      
+      // Mouse events
+      button.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // Prevent focus on mouse down
+        isPressed = true;
+        button.classList.add('button-pressed');
+      });
+      
+      button.addEventListener('mouseup', () => {
+        if (isPressed) {
+          isPressed = false;
+          button.classList.remove('button-pressed');
+        }
+      });
+      
+      button.addEventListener('mouseleave', () => {
+        if (isPressed) {
+          isPressed = false;
+          button.classList.remove('button-pressed');
+        }
+      });
+      
+      // Touch events for mobile devices
+      button.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Prevent mouse events from firing
+        isPressed = true;
+        button.classList.add('button-pressed');
+      });
+      
+      button.addEventListener('touchend', () => {
+        if (isPressed) {
+          isPressed = false;
+          button.classList.remove('button-pressed');
+        }
+      });
+      
+      button.addEventListener('touchcancel', () => {
+        if (isPressed) {
+          isPressed = false;
+          button.classList.remove('button-pressed');
+        }
+      });
+    });
+  }
+
+  /**
    * Wires up a single control using the unified system
    * @param control - The control configuration
    */
@@ -107,7 +183,8 @@ export class UIController {
       return;
     }
 
-    const eventType = control.type === 'range' ? 'input' : 'change';
+    // Use appropriate event per control type (mobile + desktop friendly)
+    const eventType = control.type === 'range' ? 'input' : control.type === 'button' ? 'click' : 'change';
     
     element.addEventListener(eventType, () => {
       const value = (element as HTMLInputElement | HTMLSelectElement).value;
@@ -353,10 +430,22 @@ export class UIController {
 
   /**
    * Updates the visual state of a piano key (active/inactive)
+   * Uses batched updates for better performance during high-speed sequences
    * @param note - The MIDI note number to update
    * @param active - Whether the key should appear active (pressed)
    */
   updatePianoKey(note: number, active: boolean): void {
+    // Batch the update instead of applying immediately
+    this.pendingPianoUpdates.set(note, active);
+    this.scheduleUpdate();
+  }
+
+  /**
+   * Immediately updates a piano key (for cases where batching isn't desired)
+   * @param note - The MIDI note number to update
+   * @param active - Whether the key should appear active (pressed)
+   */
+  updatePianoKeyImmediate(note: number, active: boolean): void {
     const keyElement = this.activeKeys.get(note);
     if (keyElement) {
       if (active) {
@@ -434,6 +523,10 @@ export class UIController {
         <div class="kb-key control-key" data-key="KeyX">X ↑</div>
       </div>
       <div class="keyboard-row">
+        <div class="kb-key control-key" data-key="ArrowDown">↓</div>
+        <div class="kb-key control-key" data-key="ArrowUp">↑</div>
+      </div>
+      <div class="keyboard-row">
         <div class="kb-key control-key wide" data-key="Space">SPACE (Sustain)</div>
       </div>
     `;
@@ -498,6 +591,8 @@ export class UIController {
       <div class="keyboard-row">
         <div class="kb-key control-key" data-key="ArrowLeft">←</div>
         <div class="kb-key control-key" data-key="ArrowRight">→</div>
+        <div class="kb-key control-key" data-key="ArrowDown">↓</div>
+        <div class="kb-key control-key" data-key="ArrowUp">↑</div>
         <div class="kb-key control-key wide" data-key="Space">SPACE (Sustain)</div>
       </div>
     `;
@@ -505,10 +600,22 @@ export class UIController {
 
   /**
    * Updates the visual state of a keyboard mapping key
+   * Uses batched updates for better performance during high-speed sequences
    * @param keyCode - The key code to update (e.g., 'KeyA')
    * @param active - Whether the key should appear active (pressed)
    */
   updateKeyVisual(keyCode: string, active: boolean): void {
+    // Batch the update instead of applying immediately
+    this.pendingKeyVisualUpdates.set(keyCode, active);
+    this.scheduleUpdate();
+  }
+
+  /**
+   * Immediately updates a keyboard mapping key (for cases where batching isn't desired)
+   * @param keyCode - The key code to update (e.g., 'KeyA')
+   * @param active - Whether the key should appear active (pressed)
+   */
+  updateKeyVisualImmediate(keyCode: string, active: boolean): void {
     const element = this.keyElements.get(keyCode);
     if (element) {
       if (active) {
@@ -534,7 +641,7 @@ export class UIController {
     switch (status) {
       case 'synced':
         icon = '🟢';
-        text = bpm ? `Synced to DAW (${bpm} BPM)` : 'Synced to DAW';
+        text = bpm ? `Synced to DAW (${Math.round(bpm)} BPM)` : 'Synced to DAW';
         className = 'clock-status synced';
         break;
       case 'free':
@@ -655,6 +762,17 @@ export class UIController {
       }
     });
 
+    if (this.midiClockInputSelect) {
+      this.controls.set('midiClockInput', {
+        id: 'midi-clock-input',
+        type: 'select',
+        getter: () => this.midiClockInputSelect!.value,
+        setter: (value) => {
+          this.midiClockInputSelect!.value = value;
+        }
+      });
+    }
+
     this.controls.set('layout', {
       id: 'layout-select',
       type: 'select',
@@ -708,5 +826,116 @@ export class UIController {
    */
   registerControl(control: UIControl): void {
     this.controls.set(control.id, control);
+  }
+
+  /** Update Mod wheel visual indicator */
+  updateModIndicator(active: boolean): void {
+    if (!this.modIndicator) return;
+    this.modIndicator.classList.toggle('active', !!active);
+  }
+
+  /** Update Pitch wheel visual indicator */
+  updatePitchIndicator(active: boolean): void {
+    if (!this.pitchIndicator) return;
+    this.pitchIndicator.classList.toggle('active', !!active);
+  }
+
+  /** Update Octave Down visual indicator */
+  updateOctaveDownIndicator(active: boolean): void {
+    if (!this.octaveDownIndicator) return;
+    this.octaveDownIndicator.classList.toggle('active', !!active);
+  }
+
+  /** Update Octave Up visual indicator */
+  updateOctaveUpIndicator(active: boolean): void {
+    if (!this.octaveUpIndicator) return;
+    this.octaveUpIndicator.classList.toggle('active', !!active);
+  }
+
+  /**
+   * Populate the MIDI Clock Input dropdown
+   */
+  populateClockInputs(inputs: { id: string; name: string }[], selected: string = 'auto'): void {
+    if (!this.midiClockInputSelect) return;
+    const select = this.midiClockInputSelect;
+    select.innerHTML = '';
+    const autoOption = document.createElement('option');
+    autoOption.value = 'auto';
+    autoOption.textContent = 'Auto (Best)';
+    select.appendChild(autoOption);
+
+    inputs.forEach(inp => {
+      const opt = document.createElement('option');
+      opt.value = inp.id;
+      opt.textContent = inp.name || `Input ${inp.id}`;
+      select.appendChild(opt);
+    });
+
+    // Set selection
+    const values = ['auto', ...inputs.map(i => i.id)];
+    if (values.includes(selected)) {
+      select.value = selected;
+    } else {
+      select.value = 'auto';
+    }
+  }
+
+  /**
+   * Listen for clock input selection changes
+   */
+  onClockInputChange(handler: (id: string) => void): void {
+    if (!this.midiClockInputSelect) return;
+    this.midiClockInputSelect.addEventListener('change', () => {
+      handler(this.midiClockInputSelect!.value);
+    });
+  }
+
+  /**
+   * Register a handler for velocity changes
+   */
+  onVelocityChange(handler: (velocity: number) => void): void {
+    this.onVelocityChangeHandlers.push(handler);
+  }
+
+  /**
+   * Schedules a batched UI update using requestAnimationFrame
+   * Prevents excessive DOM manipulation during high-speed sequences
+   */
+  private scheduleUpdate(): void {
+    if (this.updateScheduled) return;
+    
+    this.updateScheduled = true;
+    requestAnimationFrame(() => {
+      this.flushUpdates();
+      this.updateScheduled = false;
+    });
+  }
+
+  /**
+   * Applies all pending UI updates in a single batch
+   */
+  private flushUpdates(): void {
+    // Apply piano key updates
+    this.pendingPianoUpdates.forEach((active, note) => {
+      this.updatePianoKeyImmediate(note, active);
+    });
+    this.pendingPianoUpdates.clear();
+
+    // Apply keyboard visual updates
+    this.pendingKeyVisualUpdates.forEach((active, keyCode) => {
+      this.updateKeyVisualImmediate(keyCode, active);
+    });
+    this.pendingKeyVisualUpdates.clear();
+  }
+
+  /**
+   * Forces immediate flush of all pending updates
+   * Useful when immediate visual feedback is required
+   */
+  flushUpdatesImmediate(): void {
+    if (this.updateScheduled) {
+      this.flushUpdates();
+      this.updateScheduled = false;
+    }
   }
 }

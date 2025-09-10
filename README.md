@@ -219,6 +219,17 @@ Controls:   - (oct down)  = (oct up)  SPACE (sustain)
 - **Press play in DAW** to start the arpeggiator
 - **Check clock sync status** - should show green "Synced to DAW"
 
+## Mac App Store (MAS) Versioning
+
+- CFBundleVersion is tied to `package.json` `version` via electron-builder (`bundleVersion: ${version}`).
+- For every MAS upload, bump `package.json` `version` (e.g., 2.0.1 → 2.0.2). App Store Connect requires it to increase.
+- Use numeric dot-separated versions (e.g., `2.1.0`). Avoid pre-release tags for MAS submissions.
+- Build commands:
+  - Universal MAS: `npm run electron-pack-mas`
+  - Apple Silicon only MAS: `npm run electron-pack-mas-arm64`
+- Artifacts are written to `release/`.
+ - For notarization of non-MAS builds, see Notarization in `ELECTRON.md`.
+
 ### No Sound
 - The controller only sends MIDI data, not audio
 - Make sure your DAW has a software instrument loaded
