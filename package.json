@@ -31,11 +31,11 @@
   },
   "devDependencies": {
     "@types/webmidi": "^2.0.10",
-    "electron": "^37.2.4",
+    "electron": "^37.3.1",
     "electron-builder": "^26.0.12",
     "http-server": "^14.1.1",
     "typescript": "^5.3.3",
-    "vite": "^7.0.6",
+    "vite": "^7.0.7",
     "wait-on": "^8.0.4"
   },
   "keywords": [
