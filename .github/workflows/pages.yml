@@ -1,0 +1,67 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        # Electron is in devDependencies and can be heavy; we don't need it to build the static site.
+        # If your build does NOT compile electron/ files, skip optional/download-heavy deps to speed things up.
+        run: |
+          npm ci --omit=optional
+        env:
+          # Prevent electron from attempting any postinstall downloads if present
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      # If your site is served from https://<user>.github.io/<repo>/, set a base path.
+      # Option A (recommended): in vite.config.* set `base: "/kb2midi/"`
+      # Option B (env): uncomment below and read VITE_BASE in your config.
+      # - name: Build (with base path)
+      #   run: |
+      #     export VITE_BASE="/kb2midi/"
+      #     npm run build
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
