@@ -19,39 +19,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: lts/*
           cache: npm
 
       - name: Install dependencies
-        # Electron is in devDependencies and can be heavy; we don't need it to build the static site.
-        # If your build does NOT compile electron/ files, skip optional/download-heavy deps to speed things up.
         run: |
           npm ci --omit=optional
         env:
-          # Prevent electron from attempting any postinstall downloads if present
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      # If your site is served from https://<user>.github.io/<repo>/, set a base path.
-      # Option A (recommended): in vite.config.* set `base: "/kb2midi/"`
-      # Option B (env): uncomment below and read VITE_BASE in your config.
-      # - name: Build (with base path)
-      #   run: |
-      #     export VITE_BASE="/kb2midi/"
-      #     npm run build
-
       - name: Build
-        run: npm run build
+        run: |
+          export VITE_BASE="/kb2midi/"
+          npm run build
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: dist
 
