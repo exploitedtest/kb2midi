@@ -30,8 +30,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: |
-          npm ci --omit=optional
+        run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
