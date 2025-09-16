@@ -49,7 +49,6 @@ export interface ArpeggiatorState {
   pattern: ArpeggiatorPattern;
   rate: number; // In BPM
   gateLength: number; // 0-1
-  swing: number; // 0-1
   octaveRange: number;
   noteOrder: number[];
   currentStep: number;

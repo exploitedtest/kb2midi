@@ -2,17 +2,28 @@ import { MIDIEngine } from './midi-engine';
 import { KeyboardInput } from './keyboard-input';
 import { UIController } from './ui-controller';
 import { ClockSync } from './clock-sync';
-import { Arpeggiator } from './arpeggiator';
+import { Arpeggiator, CompoundStrategyComponent, createTimingStrategy, TimingStrategyOptions } from './arpeggiator';
 import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
 
 // Enhanced control configuration with better type safety
 interface ControlConfig {
   id: string;
   setter: (value: string) => void;
-  type?: 'select' | 'range' | 'button';
+  type?: 'select' | 'range' | 'button' | 'checkbox';
   displayId?: string; // For range controls that show values
   displayFormatter?: (value: number) => string;
 }
+
+type BaseTimingType = 'straight' | 'swing' | 'shuffle' | 'dotted';
+
+const BASE_TIMING_PRESETS: Record<BaseTimingType, { amount: number; options?: TimingStrategyOptions }> = {
+  straight: { amount: 0 },
+  swing: { amount: 1 },
+  shuffle: { amount: 1 },
+  dotted: { amount: 1 }
+};
+
+const HUMANIZE_PRESET_AMOUNT = 0.4;
 
 /**
  * Main controller class that orchestrates all components
@@ -34,7 +45,9 @@ class MIDIController {
   // Momentary arpeggiator rate boost state (Tab key)
   private arpBoostActive: boolean = false;
   private arpBoostBaseDivisor: number | null = null;
-  
+  private timingSeed = Math.random() * 1000000;
+  private humanizeEnabled = false;
+
   private state: ControllerState = {
     currentOctave: 4,
     velocity: 80,
@@ -111,6 +124,7 @@ class MIDIController {
     
     // Initialize UI
     this.updateUI();
+    this.applyTimingStrategy();
 
       // Mark active after successful init
       this.isActive = true;
@@ -144,13 +158,10 @@ class MIDIController {
     
     // Update UI when clock status changes
     this.clockSync.onStart(() => {
-      const bpm = this.clockSync.getBPM();
-      this.uiController.updateClockStatus('synced', bpm);
       this.updateArpeggiatorButtonText();
     });
 
     this.clockSync.onStop(() => {
-      this.uiController.updateClockStatus('stopped');
       this.updateArpeggiatorButtonText();
     });
 
@@ -158,17 +169,12 @@ class MIDIController {
     this.clockSync.onTick(() => {
       const now = performance.now();
       if (now - lastBPMUpdate > 1000) { // Update every second
-        if (this.clockSync.isRunning()) {
-          const bpm = this.clockSync.getBPM();
-          this.uiController.updateClockStatus('synced', bpm);
-        }
         lastBPMUpdate = now;
       }
     });
 
     // Beat indicator on quarter notes
     this.clockSync.onQuarterNote(() => {
-      this.uiController.updateBeatIndicator();
     });
   }
 
@@ -388,16 +394,22 @@ class MIDIController {
         displayFormatter: (value) => `${value}%`
       },
       
-      // Arpeggiator swing
+      // Arpeggiator timing type
       {
-        id: 'arp-swing',
+        id: 'arp-timing-type',
         setter: (value) => {
-          const numValue = parseInt(value);
-          this.arpeggiator.setSwing(numValue / 100);
+          this.updateArpeggiatorTimingType(value as BaseTimingType);
         },
-        type: 'range',
-        displayId: 'arp-swing-value',
-        displayFormatter: (value) => `${value}%`
+        type: 'select'
+      },
+
+      // Humanize toggle
+      {
+        id: 'arp-humanize',
+        setter: (value) => {
+          this.updateHumanizeState(value === 'true');
+        },
+        type: 'checkbox'
       }
     ];
 
@@ -431,21 +443,102 @@ class MIDIController {
         if (config.type === 'button') {
           value = '';
           config.setter(value);
+        } else if (config.type === 'checkbox') {
+          value = (element as HTMLInputElement).checked ? 'true' : 'false';
+          config.setter(value);
         } else {
           value = (element as HTMLInputElement | HTMLSelectElement).value;
           config.setter(value);
         }
         
         // Update display if configured
-        if (config.displayId && config.displayFormatter) {
+       if (config.displayId && config.displayFormatter) {
           const displayElement = document.getElementById(config.displayId);
           if (displayElement) {
             const numValue = parseInt(value);
             displayElement.textContent = config.displayFormatter(numValue);
           }
         }
+
+        this.restoreKeyboardFocus();
       });
     });
+  }
+
+  // Timing control state
+  private currentTimingType: BaseTimingType = 'straight';
+
+  /**
+   * Updates the arpeggiator timing type
+   */
+  private updateArpeggiatorTimingType(type: BaseTimingType): void {
+    this.currentTimingType = type;
+    this.applyTimingStrategy();
+  }
+
+  private updateHumanizeState(enabled: boolean): void {
+    this.humanizeEnabled = enabled;
+    if (enabled) {
+      this.timingSeed = Math.random() * 1000000;
+    }
+    this.applyTimingStrategy();
+  }
+
+  private restoreKeyboardFocus(): void {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active !== document.body && typeof active.blur === 'function') {
+      active.blur();
+    }
+
+    if (document.body && typeof document.body.focus === 'function') {
+      if (!document.body.hasAttribute('tabindex')) {
+        document.body.setAttribute('tabindex', '-1');
+      }
+      document.body.focus({ preventScroll: true });
+    } else if (typeof window.focus === 'function') {
+      window.focus();
+    }
+  }
+
+  /**
+   * Applies the current timing strategy to the arpeggiator
+   */
+  private applyTimingStrategy(): void {
+    this.arpeggiator.setHumanizeActive(this.humanizeEnabled);
+    const basePreset = BASE_TIMING_PRESETS[this.currentTimingType];
+
+    if (this.humanizeEnabled) {
+      const components: CompoundStrategyComponent[] = [];
+      if (this.currentTimingType !== 'straight' && basePreset?.amount) {
+        components.push({ type: this.currentTimingType, amount: basePreset.amount });
+      }
+      if (HUMANIZE_PRESET_AMOUNT > 0) {
+        components.push({ type: 'humanize', amount: HUMANIZE_PRESET_AMOUNT });
+      }
+
+      if (components.length === 0) {
+        this.arpeggiator.setTimingStrategy(null);
+        return;
+      }
+
+      if (components.length === 1 && components[0].type === 'humanize') {
+        const strategy = createTimingStrategy('humanize', HUMANIZE_PRESET_AMOUNT, this.timingSeed);
+        this.arpeggiator.setTimingStrategy(strategy);
+        return;
+      }
+
+      const strategy = createTimingStrategy('compound', 1, this.timingSeed, { components });
+      this.arpeggiator.setTimingStrategy(strategy);
+      return;
+    }
+
+    if (!basePreset || this.currentTimingType === 'straight' || basePreset.amount === 0) {
+      this.arpeggiator.setTimingStrategy(null);
+      return;
+    }
+
+    const strategy = createTimingStrategy(this.currentTimingType, basePreset.amount, undefined, basePreset.options);
+    this.arpeggiator.setTimingStrategy(strategy);
   }
 
   /**
@@ -577,7 +670,8 @@ class MIDIController {
       currentNotes.forEach(activeNote => {
         this.arpeggiator.addNote(activeNote.note);
       });
-      this.uiController.updateStatus('Arpeggiator Enabled - Clock Driven', 'success');
+      // check for synced clock. warn if missing in UI
+      this.refreshArpeggiatorStatus();
     } else {
       // Disabling arpeggiator: clear arpeggiator and immediately play all held notes
       this.arpeggiator.setEnabled(enabled);
@@ -605,6 +699,7 @@ class MIDIController {
     } else {
       const clockSynced = this.clockSync.isRunning();
       button.textContent = clockSynced ? 'Disable Arpeggiator' : 'Disable Arpeggiator (No Clock)';
+      this.refreshArpeggiatorStatus();
     }
   }
 
@@ -614,6 +709,20 @@ class MIDIController {
    */
   getArpeggiatorState() {
     return this.arpeggiator.getState();
+  }
+
+  /**
+   * refreshArpeggiatorStatus for UI display
+   */
+  refreshArpeggiatorStatus(): void {
+    if (!this.arpeggiator.isEnabled()) {
+      this.uiController.updateStatus('Arpeggiator Disabled', 'info');
+      return;
+    }
+
+    const clockSynced = this.clockSync.isRunning();
+    const text = clockSynced ? 'Arpeggiator Enabled - Clock Driven ⏱️' : 'Arpeggiator Enabled - Missing Clock ⚠️';
+    this.uiController.updateStatus(text, clockSynced ? 'success' : 'error');
   }
 
   /**
@@ -713,6 +822,16 @@ class MIDIController {
     this.uiController.updateKeyboardMapping(layout);
     this.uiController.updateOctaveDisplay(this.state.currentOctave);
     this.updateArpeggiatorButtonText();
+
+    const timingSelect = document.getElementById('arp-timing-type') as HTMLSelectElement | null;
+    if (timingSelect && timingSelect.value !== this.currentTimingType) {
+      timingSelect.value = this.currentTimingType;
+    }
+
+    const humanizeCheckbox = document.getElementById('arp-humanize') as HTMLInputElement | null;
+    if (humanizeCheckbox) {
+      humanizeCheckbox.checked = this.humanizeEnabled;
+    }
   }
 
   /**
@@ -777,6 +896,7 @@ class MIDIController {
 
       // Reattach keyboard listeners
       this.keyboardInput.attach();
+      this.setupKeyboardHandlers();
 
       // Refresh UI
       this.updateUI();

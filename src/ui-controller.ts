@@ -23,9 +23,7 @@ export class UIController {
   private velocitySlider: HTMLInputElement;
   private midiChannelSelect: HTMLSelectElement;
   private layoutSelect: HTMLSelectElement;
-  private clockStatusElement: HTMLElement;
   private midiClockInputSelect: HTMLSelectElement | null = null;
-  private beatIndicatorTimeout?: ReturnType<typeof setTimeout>; // Store timeout to prevent overlapping pulses
   private modIndicator: HTMLElement | null = null;
   private pitchIndicator: HTMLElement | null = null;
   private octaveDownIndicator: HTMLElement | null = null;
@@ -53,40 +51,14 @@ export class UIController {
     this.velocitySlider = document.getElementById('velocity') as HTMLInputElement;
     this.midiChannelSelect = document.getElementById('midi-channel') as HTMLSelectElement;
     this.layoutSelect = document.getElementById('layout-select') as HTMLSelectElement;
-    this.clockStatusElement = document.getElementById('clock-status')!;
     this.midiClockInputSelect = document.getElementById('midi-clock-input') as HTMLSelectElement | null;
     this.modIndicator = document.getElementById('mod-indicator');
     this.pitchIndicator = document.getElementById('pitch-indicator');
     this.octaveDownIndicator = document.getElementById('octave-down-indicator');
     this.octaveUpIndicator = document.getElementById('octave-up-indicator');
-    this.createClockStatusElement();
     this.setupUIEventListeners();
     this.setupButtonPressEffects();
     this.initializeControls();
-  }
-
-  /**
-   * Creates the clock status display element if it doesn't exist
-   */
-  private createClockStatusElement(): void {
-    if (!this.clockStatusElement) {
-      this.clockStatusElement = document.createElement('div');
-      this.clockStatusElement.id = 'clock-status';
-      this.clockStatusElement.className = 'clock-status';
-      this.clockStatusElement.textContent = '🔴 No Clock Sync';
-      
-      // Add beat indicator
-      const beatIndicator = document.createElement('div');
-      beatIndicator.id = 'beat-indicator';
-      beatIndicator.className = 'beat-indicator';
-      this.clockStatusElement.appendChild(beatIndicator);
-      
-      // Insert after the status element
-      this.statusElement.parentNode?.insertBefore(
-        this.clockStatusElement, 
-        this.statusElement.nextSibling
-      );
-    }
   }
 
   /**
@@ -627,64 +599,6 @@ export class UIController {
   }
 
   /**
-   * Updates the clock sync status display
-   * @param status - The current clock sync status
-   * @param bpm - Optional BPM to display
-   */
-  updateClockStatus(status: 'synced' | 'free' | 'stopped', bpm?: number): void {
-    if (!this.clockStatusElement) return;
-    
-    let icon: string;
-    let text: string;
-    let className: string;
-    
-    switch (status) {
-      case 'synced':
-        icon = '🟢';
-        text = bpm ? `Synced to DAW (${Math.round(bpm)} BPM)` : 'Synced to DAW';
-        className = 'clock-status synced';
-        break;
-      case 'free':
-        icon = '🟡';
-        text = 'Free Running';
-        className = 'clock-status free';
-        break;
-      case 'stopped':
-        icon = '🔴';
-        text = 'Stopped';
-        className = 'clock-status stopped';
-        break;
-    }
-    
-    // Update text content (excluding beat indicator)
-    const textNode = this.clockStatusElement.childNodes[0];
-    if (textNode && textNode.nodeType === Node.TEXT_NODE) {
-      textNode.textContent = `${icon} ${text}`;
-    } else {
-      this.clockStatusElement.insertBefore(
-        document.createTextNode(`${icon} ${text}`),
-        this.clockStatusElement.firstChild
-      );
-    }
-    
-    this.clockStatusElement.className = className;
-  }
-
-  /**
-   * Updates the beat indicator with a pulse animation
-   */
-  updateBeatIndicator(): void {
-    const indicator = document.getElementById('beat-indicator');
-    if (indicator) {
-      clearTimeout(this.beatIndicatorTimeout);
-      indicator.classList.add('pulse');
-      this.beatIndicatorTimeout = setTimeout(() => {
-        indicator.classList.remove('pulse');
-      }, 100);
-    }
-  }
-
-  /**
    * Internal handler for piano click events
    * @param note - The MIDI note number
    * @param down - Whether the key is being pressed down
@@ -782,13 +696,6 @@ export class UIController {
       }
     });
 
-    this.controls.set('clockStatus', {
-      id: 'clock-status',
-      type: 'button', // Clock status is a button-like display, not a direct control
-      getter: () => this.clockStatusElement?.textContent?.replace(/🟢|🟡|🔴/g, '') || '',
-      setter: () => {}, // No setter for this display
-      displayFormatter: (value) => value.toString()
-    });
   }
 
   /**

@@ -119,20 +119,26 @@ export class KeyboardInput {
    * @param event - The keyboard event
    */
   private handleKeyDown(event: KeyboardEvent): void {
-    // Prevent default behavior for arrow keys, space, and tab (including repeats)
-    if (event.code === 'Space' || event.code === 'Tab' || 
-        event.code === 'ArrowUp' || event.code === 'ArrowDown' || 
-        event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
+    const isNavigationKey = event.code === 'Space' || event.code === 'Tab' ||
+      event.code === 'ArrowUp' || event.code === 'ArrowDown' ||
+      event.code === 'ArrowLeft' || event.code === 'ArrowRight';
+
+    if (isNavigationKey) {
       event.preventDefault();
-      console.log(`Prevented default for ${event.code}, repeat: ${event.repeat}`);
     }
-    
+
     // Ignore if modifier keys are pressed (except shift for velocity)
     if (event.metaKey || event.ctrlKey || event.altKey) return;
-    
+
+    if (this.pressedKeys.has(event.code)) {
+      return;
+    }
+
     // Ignore repeated events for our app logic (but still prevent default above)
-    if (this.pressedKeys.has(event.code)) return;
-    
+    if (event.repeat) {
+      return;
+    }
+
     // Ignore if typing in input field
     if (event.target instanceof HTMLInputElement || 
         event.target instanceof HTMLTextAreaElement) return;

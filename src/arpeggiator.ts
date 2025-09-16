@@ -1,6 +1,490 @@
 import { ArpeggiatorState, ArpeggiatorPattern, IMidiEngine } from './types';
 import { ClockSync } from './clock-sync';
 
+export interface StepTimingContext {
+  stepIndex: number;
+  globalStep: number;
+  baseStepDurationMs: number;
+  gateLength: number;
+  clockDivisor: number;
+  notesPerStep: number;
+  slidingOverlap: boolean;
+}
+
+export interface StepTimingResult {
+  /**
+   * Offset relative to the step boundary. Can be negative when notes should trigger ahead of the clock edge.
+   */
+  playbackDelayMs: number;
+  gateDurationMs: number;
+}
+
+export interface StepTimingStrategy {
+  getTiming(context: StepTimingContext): StepTimingResult;
+}
+
+class StraightTimingStrategy implements StepTimingStrategy {
+  getTiming({ baseStepDurationMs, gateLength }: StepTimingContext): StepTimingResult {
+    const baseGate = Math.max(0, baseStepDurationMs * gateLength);
+    const gateDurationMs = Math.min(baseGate, baseStepDurationMs);
+    return {
+      playbackDelayMs: 0,
+      gateDurationMs
+    };
+  }
+}
+
+class SwingTimingStrategy implements StepTimingStrategy {
+  private readonly delayRatio: number;
+
+  constructor(amount: number) {
+    const clamped = Math.max(0, Math.min(1, amount));
+    // Map amount (0-1) to a delay ratio of 0-0.5 of the step duration
+    this.delayRatio = clamped * 0.5;
+  }
+
+  getTiming(context: StepTimingContext): StepTimingResult {
+    const isOddStep = context.globalStep % 2 === 1;
+    const baseGate = Math.max(0, context.baseStepDurationMs * context.gateLength);
+
+    if (!isOddStep) {
+      // Downbeat (even index): straight timing
+      return {
+        playbackDelayMs: 0,
+        gateDurationMs: baseGate
+      };
+    }
+
+    const delayMs = context.baseStepDurationMs * this.delayRatio;
+    const availableWindow = Math.max(0, context.baseStepDurationMs - delayMs);
+
+    return {
+      playbackDelayMs: delayMs,
+      gateDurationMs: Math.min(baseGate, availableWindow)
+    };
+  }
+}
+
+class TripletShuffleStrategy implements StepTimingStrategy {
+  private readonly delayRatio: number;
+
+  constructor(amount: number) {
+    const clamped = Math.max(0, Math.min(1, amount));
+    // Map amount (0-1) to a delay ratio targeting 66.67% position (2:1 triplet feel)
+    this.delayRatio = clamped * (2/3 - 0.5); // 0 to 16.67% additional delay beyond 50%
+  }
+
+  getTiming(context: StepTimingContext): StepTimingResult {
+    const isOddStep = context.globalStep % 2 === 1;
+    const baseGate = Math.max(0, context.baseStepDurationMs * context.gateLength);
+
+    if (!isOddStep) {
+      // Downbeat (even index): straight timing
+      return {
+        playbackDelayMs: 0,
+        gateDurationMs: baseGate
+      };
+    }
+
+    // Base 50% delay + additional shuffle delay
+    const baseDelay = context.baseStepDurationMs * 0.5;
+    const shuffleDelay = context.baseStepDurationMs * this.delayRatio;
+    const totalDelayMs = baseDelay + shuffleDelay;
+    const availableWindow = Math.max(0, context.baseStepDurationMs - totalDelayMs);
+
+    return {
+      playbackDelayMs: totalDelayMs,
+      gateDurationMs: Math.min(baseGate, availableWindow)
+    };
+  }
+}
+
+class DottedSwingStrategy implements StepTimingStrategy {
+  private readonly delayRatio: number;
+
+  constructor(amount: number) {
+    const clamped = Math.max(0, Math.min(1, amount));
+    // Map amount (0-1) to a delay ratio targeting 75% position
+    this.delayRatio = clamped * 0.75;
+  }
+
+  getTiming(context: StepTimingContext): StepTimingResult {
+    const isOddStep = context.globalStep % 2 === 1;
+    const baseGate = Math.max(0, context.baseStepDurationMs * context.gateLength);
+
+    if (!isOddStep) {
+      // Downbeat (even index): straight timing
+      return {
+        playbackDelayMs: 0,
+        gateDurationMs: baseGate
+      };
+    }
+
+    const delayMs = context.baseStepDurationMs * this.delayRatio;
+    const availableWindow = Math.max(0, context.baseStepDurationMs - delayMs);
+
+    return {
+      playbackDelayMs: delayMs,
+      gateDurationMs: Math.min(baseGate, availableWindow)
+    };
+  }
+}
+
+class HumanizeStrategy implements StepTimingStrategy {
+  private readonly maxVariationMs: number;
+  private readonly seed: number;
+
+  constructor(amount: number, seed?: number) {
+    const clamped = Math.max(0, Math.min(1, amount));
+    // Map amount (0-1) to max variation of 0-15ms
+    this.maxVariationMs = clamped * 15;
+    this.seed = seed ?? Math.random() * 1000000;
+  }
+
+  // Simple seeded random number generator for consistent timing patterns
+  private seededRandom(index: number): number {
+    const x = Math.sin(this.seed + index * 12.9898) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  getTiming(context: StepTimingContext): StepTimingResult {
+    const baseGate = Math.max(0, context.baseStepDurationMs * context.gateLength);
+
+    if (this.maxVariationMs === 0) {
+      return {
+        playbackDelayMs: 0,
+        gateDurationMs: baseGate
+      };
+    }
+
+    // Generate consistent variation based on step index
+    const variation = (this.seededRandom(context.globalStep) - 0.5) * 2; // -1 to 1
+    const delayMs = variation * this.maxVariationMs;
+
+    // Ensure we don't delay or advance more than allowed
+    const clampedDelayMs = Math.max(-this.maxVariationMs, Math.min(this.maxVariationMs, delayMs));
+
+    let availableWindow: number;
+    if (clampedDelayMs >= 0) {
+      availableWindow = Math.max(0, context.baseStepDurationMs - clampedDelayMs);
+    } else {
+      availableWindow = Math.max(0, context.baseStepDurationMs + clampedDelayMs);
+    }
+
+    return {
+      playbackDelayMs: Math.max(0, clampedDelayMs),
+      gateDurationMs: Math.min(baseGate, availableWindow)
+    };
+  }
+}
+class CompoundTimingStrategy implements StepTimingStrategy {
+  private readonly strategies: StepTimingStrategy[];
+
+  constructor(strategies: StepTimingStrategy[]) {
+    this.strategies = strategies;
+  }
+
+  getTiming(context: StepTimingContext): StepTimingResult {
+    if (this.strategies.length === 0) {
+      return new StraightTimingStrategy().getTiming(context);
+    }
+
+    const baseGate = Math.max(0, context.baseStepDurationMs * context.gateLength);
+    let accumulatedDelay = 0;
+    let gateDuration = baseGate;
+
+    this.strategies.forEach(strategy => {
+      const result = strategy.getTiming(context);
+      accumulatedDelay += result.playbackDelayMs;
+      gateDuration = Math.min(gateDuration, result.gateDurationMs);
+    });
+
+    // Clamp delay to a reasonable window (-stepLength, +stepLength)
+    const maxAdvance = -context.baseStepDurationMs;
+    const maxDelay = context.baseStepDurationMs;
+    const clampedDelay = Math.max(maxAdvance, Math.min(maxDelay, accumulatedDelay));
+
+    const availableWindow = clampedDelay >= 0
+      ? Math.max(0, context.baseStepDurationMs - clampedDelay)
+      : Math.max(0, context.baseStepDurationMs + clampedDelay);
+
+    return {
+      playbackDelayMs: clampedDelay,
+      gateDurationMs: Math.min(gateDuration, availableWindow)
+    };
+  }
+}
+
+export type TimingStrategyType = 'straight' | 'swing' | 'shuffle' | 'dotted' | 'humanize' | 'compound';
+
+export interface CompoundStrategyComponent {
+  type: Exclude<TimingStrategyType, 'compound'>;
+  amount: number;
+}
+
+export interface TimingStrategyOptions {
+  components?: CompoundStrategyComponent[];
+}
+
+export function createTimingStrategy(
+  type: TimingStrategyType,
+  amount: number,
+  seed?: number,
+  options?: TimingStrategyOptions
+): StepTimingStrategy {
+  if (type !== 'humanize' && amount <= 0 && type !== 'compound') {
+    return new StraightTimingStrategy();
+  }
+
+  switch (type) {
+    case 'swing':
+      return new SwingTimingStrategy(amount);
+    case 'shuffle':
+      return new TripletShuffleStrategy(amount);
+    case 'dotted':
+      return new DottedSwingStrategy(amount);
+    case 'humanize':
+      return new HumanizeStrategy(amount, seed);
+    case 'compound': {
+      const components = options?.components ?? [];
+      const strategies = components.map(component =>
+        createTimingStrategy(component.type, component.amount, seed)
+      );
+      return new CompoundTimingStrategy(strategies);
+    }
+    case 'straight':
+    default:
+      return new StraightTimingStrategy();
+  }
+}
+
+// Legacy function for backward compatibility
+export function createSwingTimingStrategy(amount: number): StepTimingStrategy {
+  return createTimingStrategy('swing', amount);
+}
+
+const SCHED_NOOP = () => {};
+
+interface ScheduledEvent {
+  id: number;
+  dueTime: number;
+  callback: () => void;
+  group?: string;
+}
+
+class EventScheduler {
+  private queue: ScheduledEvent[] = [];
+  private eventMap = new Map<number, ScheduledEvent>();
+  private readonly groupMap = new Map<string, Set<number>>();
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private nextId = 1;
+  private readonly dueEventsBuffer: ScheduledEvent[] = [];
+  private readonly eventPool: ScheduledEvent[] = [];
+  private readonly maxPoolSize = 64;
+
+  constructor() {
+    // Pre-allocate 16 event objects for reuse
+    for (let i = 0; i < 16; i++) {
+      this.eventPool.push({
+        id: 0,
+        dueTime: 0,
+        callback: SCHED_NOOP,
+        group: undefined
+      });
+    }
+  }
+
+  private getPooledEvent(): ScheduledEvent {
+    if (this.eventPool.length === 0) {
+      // Fallback to allocation if pool is exhausted
+      return {
+        id: 0,
+        dueTime: 0,
+        callback: SCHED_NOOP,
+        group: undefined
+      };
+    }
+    return this.eventPool.pop()!;
+  }
+
+  private returnToPool(event: ScheduledEvent): void {
+    if (this.eventPool.length < this.maxPoolSize) {
+      // Reset event state and return to pool
+      event.id = 0;
+      event.dueTime = 0;
+      event.callback = SCHED_NOOP;
+      event.group = undefined;
+      this.eventPool.push(event);
+    }
+  }
+
+  schedule(callback: () => void, delayMs: number, group?: string): number {
+    const dueTime = this.now() + Math.max(0, delayMs);
+    const event = this.getPooledEvent();
+    event.id = this.nextId++;
+    event.dueTime = dueTime;
+    event.callback = callback;
+    event.group = group;
+
+    this.eventMap.set(event.id, event);
+    if (group) {
+      let groupSet = this.groupMap.get(group);
+      if (!groupSet) {
+        groupSet = new Set();
+        this.groupMap.set(group, groupSet);
+      }
+      groupSet.add(event.id);
+    }
+    const index = this.findInsertIndex(dueTime);
+    this.queue.splice(index, 0, event);
+
+    if (index === 0 || !this.timer) {
+      this.scheduleNextTimer();
+    }
+
+    return event.id;
+  }
+
+  cancel(id: number, skipGroupCleanup = false): void {
+    const event = this.eventMap.get(id);
+    if (!event) return;
+
+    this.eventMap.delete(id);
+    if (!skipGroupCleanup && event.group) {
+      const groupSet = this.groupMap.get(event.group);
+      if (groupSet) {
+        groupSet.delete(id);
+        if (groupSet.size === 0) {
+          this.groupMap.delete(event.group);
+        }
+      }
+    }
+    const index = this.queue.indexOf(event);
+    if (index !== -1) {
+      this.queue.splice(index, 1);
+    }
+
+    this.returnToPool(event);
+    this.scheduleNextTimer();
+  }
+
+  cancelGroup(group: string): void {
+    const groupSet = this.groupMap.get(group);
+    if (!groupSet || groupSet.size === 0) {
+      return;
+    }
+
+    for (const id of groupSet) {
+      this.cancel(id, true);
+    }
+    groupSet.clear();
+    this.groupMap.delete(group);
+  }
+
+  clear(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+
+    // Return all queued events to pool
+    this.queue.forEach(event => this.returnToPool(event));
+    this.queue = [];
+    this.eventMap.clear();
+    this.groupMap.clear();
+    }
+
+  private scheduleNextTimer(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+
+    if (this.queue.length === 0) {
+      return;
+    }
+
+    const nextEvent = this.queue[0];
+    const delay = Math.max(0, nextEvent.dueTime - this.now());
+    this.timer = setTimeout(() => this.runDueEvents(), delay);
+  }
+
+  private runDueEvents(): void {
+    this.timer = null;
+    if (this.queue.length === 0) {
+      return;
+    }
+
+    const now = this.now();
+    this.dueEventsBuffer.length = 0;
+
+    while (this.queue.length > 0) {
+      const next = this.queue[0];
+      if (next.dueTime - now > 1) {
+        break;
+      }
+      this.dueEventsBuffer.push(next);
+      this.queue.shift();
+      this.eventMap.delete(next.id);
+      if (next.group) {
+        const groupSet = this.groupMap.get(next.group);
+        if (groupSet) {
+          groupSet.delete(next.id);
+          if (groupSet.size === 0) {
+            this.groupMap.delete(next.group);
+          }
+        }
+      }
+    }
+
+    this.dueEventsBuffer.forEach(event => {
+      try {
+        event.callback();
+      } catch (error) {
+        console.error('Error in scheduled arpeggiator event:', error);
+      }
+      this.returnToPool(event);
+    });
+
+    this.scheduleNextTimer();
+  }
+
+  private findInsertIndex(dueTime: number): number {
+    let low = 0;
+    let high = this.queue.length;
+
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      if (dueTime < this.queue[mid].dueTime) {
+        high = mid;
+      } else {
+        low = mid + 1;
+      }
+    }
+
+    return low;
+  }
+
+  private now(): number {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+      return performance.now();
+    }
+    return Date.now();
+  }
+}
+
+interface NoteOffBatch {
+  eventId: number;
+  channel: number;
+  notes: number[];
+  noteKeys: number[];
+}
+
+interface HeldNoteEntry {
+  batch: NoteOffBatch;
+  index: number;
+}
+
 /**
  * Arpeggiator that syncs to external MIDI clock
  * Generates arpeggio patterns based on held notes and external timing
@@ -19,7 +503,6 @@ export class Arpeggiator {
     pattern: 'up',
     rate: 120,
     gateLength: 0.5,
-    swing: 0,
     octaveRange: 1,
     noteOrder: [],
     currentStep: 0,
@@ -33,14 +516,188 @@ export class Arpeggiator {
   private clockSync: ClockSync;
   private midiEngine: IMidiEngine | null = null;
   private onStepCallbacks: ((step: number, note: number) => void)[] = [];
-  private activeTimeouts: Set<ReturnType<typeof setTimeout>> = new Set();
-  private heldNoteTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private scheduler = new EventScheduler();
+  private heldNoteEntries: Map<number, HeldNoteEntry> = new Map();
+  private noteOffBatches = new Map<number, NoteOffBatch>();
+  private readonly batchPool: NoteOffBatch[] = [];
+  private readonly maxBatchPoolSize = 32;
+  private readonly singleNoteScratch: number[] = [0];
+  private stepCounter = 0;
+  private pendingPlaybackEvents: Set<number> = new Set();
+  private humanizeActive = false;
   private lastProcessedTick: number = -1;
   private getChannel: (() => number) | null = null;
   private getVelocity: (() => number) | null = null;
+  private readonly defaultTimingStrategy: StepTimingStrategy = new StraightTimingStrategy();
+  private timingStrategy: StepTimingStrategy;
+  private readonly stepNotesBuffer: number[] = [];
+  private readonly stackedChordOffsets = [-12, 0, 12];
+
+  private encodeNoteKey(note: number, channel: number): number {
+    return (channel << 8) | (note & 0x7f);
+  }
+
+  private acquireBatch(channel: number): NoteOffBatch {
+    const batch = this.batchPool.pop() ?? { eventId: 0, channel, notes: [], noteKeys: [] };
+    batch.channel = channel;
+    batch.eventId = 0;
+    batch.notes.length = 0;
+    batch.noteKeys.length = 0;
+    return batch;
+  }
+
+  private releaseBatch(batch: NoteOffBatch): void {
+    if (this.batchPool.length >= this.maxBatchPoolSize) {
+      batch.notes.length = 0;
+      batch.noteKeys.length = 0;
+      batch.eventId = 0;
+      return;
+    }
+
+    batch.notes.length = 0;
+    batch.noteKeys.length = 0;
+    batch.eventId = 0;
+    this.batchPool.push(batch);
+  }
+
+  private stopMidiNote(note: number, channel: number): void {
+    try {
+      if (this.midiEngine) {
+        this.midiEngine.stopNote(note, 0, channel);
+      }
+    } catch (error) {
+      console.error('Error stopping arpeggiator note:', error);
+    }
+  }
+
+  private detachHeldNote(key: number, stopImmediately: boolean): void {
+    const entry = this.heldNoteEntries.get(key);
+    if (!entry) {
+      return;
+    }
+    this.detachHeldNoteEntry(key, entry, stopImmediately);
+  }
+
+  private detachHeldNoteEntry(key: number, entry: HeldNoteEntry, stopImmediately: boolean): void {
+    const batch = entry.batch;
+    const index = entry.index;
+    const lastIndex = batch.notes.length - 1;
+
+    if (lastIndex < 0) {
+      this.heldNoteEntries.delete(key);
+      return;
+    }
+
+    if (index < 0 || index > lastIndex) {
+      this.heldNoteEntries.delete(key);
+      return;
+    }
+
+    const note = batch.notes[index];
+    if (typeof note !== 'number') {
+      this.heldNoteEntries.delete(key);
+      return;
+    }
+    const channel = batch.channel;
+
+    if (stopImmediately && this.midiEngine) {
+      this.stopMidiNote(note, channel);
+    }
+
+    if (index !== lastIndex) {
+      const lastNote = batch.notes[lastIndex];
+      const lastKey = batch.noteKeys[lastIndex];
+      batch.notes[index] = lastNote;
+      batch.noteKeys[index] = lastKey;
+      const swappedEntry = this.heldNoteEntries.get(lastKey);
+      if (swappedEntry) {
+        swappedEntry.index = index;
+      }
+    }
+
+    batch.notes.pop();
+    batch.noteKeys.pop();
+    this.heldNoteEntries.delete(key);
+
+    if (batch.notes.length === 0) {
+      if (batch.eventId !== 0) {
+        this.scheduler.cancel(batch.eventId);
+        this.noteOffBatches.delete(batch.eventId);
+      }
+      this.releaseBatch(batch);
+    }
+  }
+
+  private finalizeBatch(batch: NoteOffBatch, stopMidi: boolean): void {
+    if (stopMidi && this.midiEngine) {
+      for (let i = 0; i < batch.notes.length; i++) {
+        this.stopMidiNote(batch.notes[i], batch.channel);
+      }
+    }
+
+    for (let i = 0; i < batch.noteKeys.length; i++) {
+      this.heldNoteEntries.delete(batch.noteKeys[i]);
+    }
+
+    this.releaseBatch(batch);
+  }
+
+  private flushNoteOffBatches(stopMidi: boolean): void {
+    this.noteOffBatches.forEach((batch, _eventId) => {
+      if (batch.eventId !== 0) {
+        this.scheduler.cancel(batch.eventId);
+      }
+      this.finalizeBatch(batch, stopMidi);
+    });
+    this.noteOffBatches.clear();
+    this.heldNoteEntries.clear();
+  }
+
+  private playNotesWithGateBatched(notes: readonly number[], velocity: number, channel: number, gateTime: number): void {
+    if (!this.midiEngine || notes.length === 0) {
+      return;
+    }
+
+    // Stop any prior gates for these notes
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i];
+      const key = this.encodeNoteKey(note, channel);
+      this.detachHeldNote(key, true);
+    }
+
+    const batch = this.acquireBatch(channel);
+
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i];
+      this.midiEngine.playNote(note, velocity, channel);
+      batch.notes.push(note);
+      batch.noteKeys.push(this.encodeNoteKey(note, channel));
+    }
+
+    if (gateTime <= 0) {
+      this.finalizeBatch(batch, true);
+      return;
+    }
+
+    let eventId = 0;
+    const scheduledBatch = batch;
+    eventId = this.scheduler.schedule(() => {
+      this.noteOffBatches.delete(eventId);
+      this.finalizeBatch(scheduledBatch, true);
+    }, gateTime, 'note-off');
+
+    scheduledBatch.eventId = eventId;
+    this.noteOffBatches.set(eventId, scheduledBatch);
+
+    for (let i = 0; i < scheduledBatch.noteKeys.length; i++) {
+      const key = scheduledBatch.noteKeys[i];
+      this.heldNoteEntries.set(key, { batch: scheduledBatch, index: i });
+    }
+  }
 
   constructor(clockSync: ClockSync) {
     this.clockSync = clockSync;
+    this.timingStrategy = this.defaultTimingStrategy;
     this.setupClockSync();
   }
 
@@ -60,9 +717,7 @@ export class Arpeggiator {
       if (this.state.enabled && this.state.syncToClock) {
         const ticksPerStep = Math.floor(24 / this.state.clockDivisor);
         if (currentTick % ticksPerStep === 0) {
-          // Clock handles the sequence
-          this.playCurrentStep();
-          this.advanceStep();
+          this.handleClockStep();
         }
       }
     });
@@ -71,6 +726,8 @@ export class Arpeggiator {
       if (this.state.enabled) {
         this.state.currentStep = 0;
         this.lastProcessedTick = -1;
+        this.stepCounter = 0;
+        this.clearPendingPlaybackTimeouts();
       }
     });
   }
@@ -106,6 +763,10 @@ export class Arpeggiator {
       this.clearAllTimeouts();
       this.stopAllNotes();
       this.state.currentStep = 0;
+      this.stepCounter = 0;
+    } else {
+      this.stepCounter = 0;
+      this.clearPendingPlaybackTimeouts();
     }
   }
 
@@ -125,6 +786,9 @@ export class Arpeggiator {
    */
   setClockDivisor(divisor: number): void {
     this.state.clockDivisor = divisor;
+    if (this.state.enabled && this.state.syncToClock) {
+      this.clearPendingPlaybackTimeouts();
+    }
   }
 
   /**
@@ -132,13 +796,9 @@ export class Arpeggiator {
    */
   setGateLength(gateLength: number): void {
     this.state.gateLength = Math.max(0, Math.min(1, gateLength));
-  }
-
-  /**
-   * Sets the swing amount (0-1)
-   */
-  setSwing(swing: number): void {
-    this.state.swing = Math.max(0, Math.min(1, swing));
+    if (this.state.enabled && this.state.syncToClock) {
+      this.clearPendingPlaybackTimeouts();
+    }
   }
 
   /**
@@ -155,6 +815,9 @@ export class Arpeggiator {
    */
   setNotesPerStep(notesPerStep: number): void {
     this.state.notesPerStep = Math.max(1, Math.floor(notesPerStep));
+    if (this.state.enabled && this.state.syncToClock) {
+      this.clearPendingPlaybackTimeouts();
+    }
   }
 
   /**
@@ -163,6 +826,24 @@ export class Arpeggiator {
    */
   setSlidingWindowOverlap(overlap: boolean): void {
     this.state.slidingOverlap = overlap;
+    if (this.state.enabled && this.state.syncToClock) {
+      this.clearPendingPlaybackTimeouts();
+    }
+  }
+
+  /**
+   * Allows external callers to provide a custom timing strategy (e.g., swing, shuffle)
+   * Passing null/undefined resets to the straight timing strategy
+   */
+  setTimingStrategy(strategy?: StepTimingStrategy | null): void {
+    this.timingStrategy = strategy ?? this.defaultTimingStrategy;
+    if (this.state.enabled && this.state.syncToClock) {
+      this.clearPendingPlaybackTimeouts();
+    }
+  }
+
+  setHumanizeActive(active: boolean): void {
+    this.humanizeActive = active;
   }
 
   /**
@@ -200,13 +881,73 @@ export class Arpeggiator {
     this.pressOrder = [];
     this.state.noteOrder = [];
     this.state.currentStep = 0;
+    this.clearPendingPlaybackTimeouts();
   }
 
   /**
-   * SIMPLIFIED: Just plays the current step - no advancement logic
-   * NEW: Supports sliding window with notesPerStep parameter
+   * Handles a clock-aligned step, accounting for early executions
    */
-  private playCurrentStep(): void {
+  private handleClockStep(): void {
+    const stepIndex = this.state.currentStep;
+    const stepCount = this.stepCounter;
+
+    this.playStep(stepIndex, stepCount);
+
+    this.stepCounter++;
+    this.advanceStep();
+  }
+
+  private createTimingContext(stepIndex: number, baseStepDurationMs: number, globalStep: number): StepTimingContext {
+    return {
+      stepIndex,
+      globalStep,
+      baseStepDurationMs,
+      gateLength: this.state.gateLength,
+      clockDivisor: this.state.clockDivisor,
+      notesPerStep: this.state.notesPerStep,
+      slidingOverlap: this.state.slidingOverlap
+    };
+  }
+
+  private calculateStepTiming(stepIndex: number, stepCount: number): { timing: StepTimingResult; gateTime: number; baseStepDuration: number } {
+    const baseStepDuration = this.getStepTimeMs();
+    const timing = this.timingStrategy.getTiming(this.createTimingContext(stepIndex, baseStepDuration, stepCount));
+    const maxGate = Math.max(0, baseStepDuration - 2);
+    const gateTime = Math.min(Math.max(0, timing.gateDurationMs), maxGate);
+    return { timing, gateTime, baseStepDuration };
+  }
+
+  private clearPendingPlaybackTimeouts(): void {
+    if (this.pendingPlaybackEvents.size === 0) {
+      return;
+    }
+
+    this.scheduler.cancelGroup('playback');
+    this.pendingPlaybackEvents.clear();
+  }
+
+  /**
+   * Plays a specific step using the current timing strategy
+   */
+  private playStep(stepIndex: number, stepCount: number): void {
+    if (this.state.noteOrder.length === 0) return;
+
+    const { timing, gateTime } = this.calculateStepTiming(stepIndex, stepCount);
+
+    if (timing.playbackDelayMs <= 0) {
+      this.executeStepPlayback(stepIndex, gateTime, stepCount);
+    } else {
+      let playbackEventId = 0;
+      playbackEventId = this.scheduler.schedule(() => {
+        this.pendingPlaybackEvents.delete(playbackEventId);
+        this.executeStepPlayback(stepIndex, gateTime, stepCount);
+      }, timing.playbackDelayMs, 'playback');
+      this.pendingPlaybackEvents.add(playbackEventId);
+    }
+  }
+
+  private executeStepPlayback(stepIndex: number, gateTime: number, _stepCount: number): void {
+    if (!this.state.enabled) return;
     if (this.state.noteOrder.length === 0) return;
 
     try {
@@ -217,78 +958,91 @@ export class Arpeggiator {
 
       const channel = this.getChannel ? this.getChannel() : 1;
       const velocity = this.getVelocity ? this.getVelocity() : 80;
-      const stepTimeMs = this.getStepTimeMs();
-      const gateTime = Math.min(this.calculateGateTime(), Math.max(0, stepTimeMs - 2)); // leave a tiny headroom to avoid overlap
+      const sequenceLength = this.state.noteOrder.length;
+      if (sequenceLength === 0) return;
+      const normalizedIndex = ((stepIndex % sequenceLength) + sequenceLength) % sequenceLength;
+      const notesToPlay = this.stepNotesBuffer;
+      notesToPlay.length = 0;
 
       if (this.state.pattern === 'chord' || this.state.pattern === 'stacked-chord') {
-        // Chord modes: play ALL notes simultaneously (ignores notesPerStep)
-        const notesToPlay = this.state.pattern === 'chord'
-          ? [...this.state.noteOrder]
-          : this.getStackedChordNotes();
-
-        notesToPlay.forEach(note => {
-          this.playNoteWithGate(note, velocity, channel, gateTime);
-          this.onStepCallbacks.forEach(callback => {
-            try {
-              callback(this.state.currentStep, note);
-            } catch (error) {
-              console.error('Error in arpeggiator step callback:', error);
-            }
-          });
-        });
-        
-      } else {
-        // Pattern modes: play notesPerStep notes at a time (sliding window)
-        const notesToPlay: number[] = [];
-        const sequenceLength = this.state.noteOrder.length;
-        
-        // Collect notesPerStep notes starting from currentStep
-        for (let i = 0; i < this.state.notesPerStep && i < sequenceLength; i++) {
-          const noteIndex = (this.state.currentStep + i) % sequenceLength;
-          notesToPlay.push(this.state.noteOrder[noteIndex]);
+        if (this.state.pattern === 'chord') {
+          this.state.noteOrder.forEach(note => notesToPlay.push(note));
+        } else {
+          this.fillStackedChordNotes(notesToPlay);
         }
 
-        // Play all notes in the window
+        // Use batched note operations for chord patterns (multiple simultaneous notes)
+        this.playNotesWithGateBatched(notesToPlay, velocity, channel, gateTime);
+
+        notesToPlay.forEach(note => {
+          this.notifyStepCallbacks(normalizedIndex, note);
+        });
+
+        notesToPlay.length = 0;
+
+        return;
+      }
+
+      const maxNotes = this.humanizeActive
+        ? Math.min(1, sequenceLength)
+        : Math.min(this.state.notesPerStep, sequenceLength);
+
+      for (let i = 0; i < maxNotes; i++) {
+        const noteIndex = (normalizedIndex + i) % sequenceLength;
+        notesToPlay.push(this.state.noteOrder[noteIndex]);
+      }
+
+      if (maxNotes > 1) {
+        // Use batched operations for sliding window with multiple notes
+        this.playNotesWithGateBatched(notesToPlay, velocity, channel, gateTime);
+        notesToPlay.forEach(note => {
+          this.notifyStepCallbacks(normalizedIndex, note);
+        });
+      } else {
+        // Single note - use individual operation to maintain existing behavior
         notesToPlay.forEach(note => {
           this.playNoteWithGate(note, velocity, channel, gateTime);
-
-          this.onStepCallbacks.forEach(callback => {
-            try {
-              callback(this.state.currentStep, note);
-            } catch (error) {
-              console.error('Error in arpeggiator step callback:', error);
-            }
-          });
+          this.notifyStepCallbacks(normalizedIndex, note);
         });
       }
+
+      notesToPlay.length = 0;
     } catch (error) {
       console.error('Error playing arpeggiator step:', error);
     }
   }
 
+  private notifyStepCallbacks(stepIndex: number, note: number): void {
+    this.onStepCallbacks.forEach(callback => {
+      try {
+        callback(stepIndex, note);
+      } catch (error) {
+        console.error('Error in arpeggiator step callback:', error);
+      }
+    });
+  }
+
   /**
    * Build stacked chord notes from noteOrder
    */
-  private getStackedChordNotes(): number[] {
-    const baseNotes = this.state.pattern === 'timeline' 
+  private fillStackedChordNotes(target: number[]): void {
+    target.length = 0;
+
+    const baseNotes = this.state.pattern === 'timeline'
       ? [...this.pressOrder]
       : [...this.pressOrder].sort((a, b) => a - b);
-      
-    const layers = [-12, 0, 12];
+
     const seen = new Set<number>();
-    const result: number[] = [];
-    
+
     baseNotes.forEach(base => {
-      layers.forEach(off => {
-        const n = base + off;
-        if (n >= 0 && n <= 127 && !seen.has(n)) {
-          seen.add(n);
-          result.push(n);
+      this.stackedChordOffsets.forEach(offset => {
+        const note = base + offset;
+        if (note >= 0 && note <= 127 && !seen.has(note)) {
+          seen.add(note);
+          target.push(note);
         }
       });
     });
-    
-    return result;
   }
 
   /**
@@ -299,6 +1053,7 @@ export class Arpeggiator {
     if (this.pressOrder.length === 0) {
       this.state.noteOrder = [];
       this.state.currentStep = 0;
+      this.clearPendingPlaybackTimeouts();
       return;
     }
 
@@ -361,18 +1116,15 @@ export class Arpeggiator {
     if (this.state.noteOrder.length > 0 && this.state.currentStep >= this.state.noteOrder.length) {
       this.state.currentStep = this.state.currentStep % this.state.noteOrder.length;
     }
+
+    if (this.state.enabled && this.state.syncToClock) {
+      this.clearPendingPlaybackTimeouts();
+    }
   }
 
   /**
    * Calculates gate time based on BPM and gate length
    */
-  private calculateGateTime(): number {
-    const bpm = this.clockSync.getBPM();
-    const beatTime = (60 / bpm) * 1000; // ms per quarter note
-    const stepTime = beatTime / this.state.clockDivisor;
-    return stepTime * this.state.gateLength;
-  }
-
 /**
  * Returns the duration (ms) of a single step at the current tempo/division
  */
@@ -382,47 +1134,9 @@ private getStepTimeMs(): number {
   return beatTime / this.state.clockDivisor;
 }
 
-/**
- * Plays a single note and ensures it is stopped correctly on the same channel.
- * Also prevents overlaps by force-stopping a previous instance of the same note/channel
- * before retriggering, and tracks the timeout so it can be cancelled later.
- */
 private playNoteWithGate(note: number, velocity: number, channel: number, gateTime: number): void {
-  const key = `${note}:${channel}`;
-
-  // If this note is already gated on this channel, stop it before retriggering
-  const existing = this.heldNoteTimeouts.get(key);
-  if (existing) {
-    clearTimeout(existing);
-    this.activeTimeouts.delete(existing);
-    this.heldNoteTimeouts.delete(key);
-    try {
-      if (this.midiEngine) {
-        this.midiEngine.stopNote(note, 0, channel);
-      }
-    } catch (error) {
-      console.error('Error force-stopping active note:', error);
-    }
-  }
-
-  // Start note
-  this.midiEngine!.playNote(note, velocity, channel);
-
-  // Schedule stop on the same channel (no re-fetching the channel)
-  const timeout = setTimeout(() => {
-    this.activeTimeouts.delete(timeout);
-    this.heldNoteTimeouts.delete(key);
-    try {
-      if (this.midiEngine && this.state.enabled) {
-        this.midiEngine.stopNote(note, 0, channel);
-      }
-    } catch (error) {
-      console.error('Error stopping arpeggiator note:', error);
-    }
-  }, gateTime);
-
-  this.activeTimeouts.add(timeout);
-  this.heldNoteTimeouts.set(key, timeout);
+  this.singleNoteScratch[0] = note;
+  this.playNotesWithGateBatched(this.singleNoteScratch, velocity, channel, gateTime);
 }
 
   /**
@@ -441,7 +1155,7 @@ private playNoteWithGate(note: number, velocity: number, channel: number, gateTi
    * Stops all currently playing notes
    */
   private stopAllNotes(): void {
-    this.heldNoteTimeouts.clear();
+    this.flushNoteOffBatches(true);
     if (!this.midiEngine) return;
 
     const channel = this.getChannel ? this.getChannel() : 1;
@@ -455,26 +1169,11 @@ private playNoteWithGate(note: number, velocity: number, channel: number, gateTi
    * Clears all active timeouts
    */
   private clearAllTimeouts(): void {
-    
-      // Cancel scheduled note-off events
-      this.activeTimeouts.forEach(timeout => clearTimeout(timeout));
-      this.activeTimeouts.clear();
-    
-      // Immediately stop any notes that are still held (across all channels we started)
-      if (this.midiEngine) {
-        this.heldNoteTimeouts.forEach((_, key) => {
-          const [noteStr, chStr] = key.split(':');
-          const note = Number(noteStr);
-          const channel = Number(chStr);
-          try {
-            this.midiEngine?.stopNote(note, 0, channel);
-          } catch (error) {
-            console.error('Error force-stopping note during timeout clear:', error);
-          }
-        });
-      }
-      this.heldNoteTimeouts.clear();
-    
+    this.clearPendingPlaybackTimeouts();
+    this.flushNoteOffBatches(true);
+
+    this.scheduler.clear();
+    this.pendingPlaybackEvents.clear();
   }
 
   /**

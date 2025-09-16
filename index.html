@@ -106,10 +106,18 @@
                 <input type="range" id="arp-gate" min="0" max="100" value="50">
                 <span id="arp-gate-value">50%</span>
             </div>
-            <div class="control-group" style="display: none;"> <!-- Swing is not implemented yet -->
-                <label>Swing</label>
-                <input type="range" id="arp-swing" min="0" max="100" value="0">
-                <span id="arp-swing-value">0%</span>
+            <div class="control-group">
+                <label>Timing</label>
+                <select id="arp-timing-type">
+                    <option value="straight" selected>Straight</option>
+                    <option value="swing">Swing (50%)</option>
+                    <option value="shuffle">Shuffle (66%)</option>
+                    <option value="dotted">Dotted (75%)</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="arp-humanize">Humanize</label>
+                <input type="checkbox" id="arp-humanize">
             </div>
         </div>
     </div>
@@ -126,11 +134,6 @@
         Octave: <span id="current-octave">4</span>
     </div>
     
-    <div id="clock-status" class="clock-status">
-        🔴 No Clock Sync
-        <div id="beat-indicator" class="beat-indicator"></div>
-    </div>
-
     <div class="instructions">
         <h3>Setup Instructions</h3>
         <p><strong>⚠️ Important:</strong> The Web MIDI API in browsers can't create new MIDI devices that other software can see. We need to create a virtual MIDI port first.</p>

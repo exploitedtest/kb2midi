@@ -45,37 +45,6 @@ body {
     border-color: #f44336;
 }
 
-.clock-status {
-    background: rgba(255,255,255,0.1);
-    padding: 8px 16px;
-    border-radius: 20px;
-    margin-bottom: 15px;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.2);
-    font-size: 14px;
-    font-weight: 500;
-    text-align: center;
-    transition: all 0.3s ease;
-}
-
-.clock-status.synced {
-    background: rgba(76, 175, 80, 0.3);
-    border-color: #4CAF50;
-    box-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
-}
-
-.clock-status.free {
-    background: rgba(255, 193, 7, 0.3);
-    border-color: #FFC107;
-    box-shadow: 0 0 10px rgba(255, 193, 7, 0.3);
-}
-
-.clock-status.stopped {
-    background: rgba(244, 67, 54, 0.3);
-    border-color: #f44336;
-    box-shadow: 0 0 10px rgba(244, 67, 54, 0.3);
-}
-
 .arpeggiator-controls {
     display: flex;
     gap: 15px;
