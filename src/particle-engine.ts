@@ -1,6 +1,7 @@
 /**
  * Particle Engine for visual effects when notes are played
  * Inspired by Rousseau-style piano visualizations
+ * Mobile-optimized with performance considerations
  */
 
 interface Particle {

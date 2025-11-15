@@ -1,0 +1,165 @@
+/**
+ * Design Tokens - CSS Custom Properties
+ * Modern approach to theming and consistency
+ */
+
+:root {
+  /* Color Palette */
+  --color-primary: #667eea;
+  --color-primary-dark: #764ba2;
+  --color-success: #4CAF50;
+  --color-success-light: rgba(76, 175, 80, 0.3);
+  --color-error: #f44336;
+  --color-error-light: rgba(244, 67, 54, 0.3);
+  --color-warning: #FFC107;
+  --color-warning-light: rgba(255, 193, 7, 0.3);
+  --color-info: #2196F3;
+
+  /* Grayscale */
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-gray-50: rgba(255, 255, 255, 0.05);
+  --color-gray-100: rgba(255, 255, 255, 0.1);
+  --color-gray-200: rgba(255, 255, 255, 0.2);
+  --color-gray-300: rgba(255, 255, 255, 0.3);
+  --color-gray-400: rgba(255, 255, 255, 0.4);
+  --color-gray-500: rgba(255, 255, 255, 0.5);
+
+  /* Particle Colors (Rousseau-inspired rainbow) */
+  --particle-red: #FF6B6B;
+  --particle-orange: #FF8E53;
+  --particle-yellow: #FFC93C;
+  --particle-lime: #FFE66D;
+  --particle-cyan: #95E1D3;
+  --particle-blue: #5DADE2;
+  --particle-purple: #A569BD;
+  --particle-pink: #EC7063;
+  --particle-gold: #F8B500;
+  --particle-teal: #48C9B0;
+  --particle-sky: #5499C7;
+  --particle-lavender: #BB8FCE;
+
+  /* Spacing Scale (based on 8px grid) */
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.5rem;   /* 8px */
+  --space-3: 0.75rem;  /* 12px */
+  --space-4: 1rem;     /* 16px */
+  --space-5: 1.25rem;  /* 20px */
+  --space-6: 1.5rem;   /* 24px */
+  --space-8: 2rem;     /* 32px */
+  --space-10: 2.5rem;  /* 40px */
+  --space-12: 3rem;    /* 48px */
+
+  /* Border Radius */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 10px;
+  --radius-xl: 15px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.3);
+  --shadow-glow-success: 0 0 8px rgba(76, 175, 80, 0.4);
+  --shadow-glow-warning: 0 0 10px rgba(255, 193, 7, 0.3);
+  --shadow-glow-error: 0 0 10px rgba(244, 67, 54, 0.3);
+
+  /* Typography */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Courier New', monospace;
+
+  --font-size-xs: 0.625rem;   /* 10px */
+  --font-size-sm: 0.75rem;    /* 12px */
+  --font-size-base: 0.875rem; /* 14px */
+  --font-size-md: 1rem;       /* 16px */
+  --font-size-lg: 1.2rem;     /* 19.2px */
+  --font-size-xl: 1.5rem;     /* 24px */
+  --font-size-2xl: 2rem;      /* 32px */
+  --font-size-3xl: 2.5rem;    /* 40px */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.6;
+
+  /* Transitions */
+  --transition-fast: 0.1s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* Z-index Scale */
+  --z-base: 0;
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-fixed: 30;
+  --z-modal-backdrop: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-tooltip: 70;
+
+  /* Touch Targets (Mobile-first) */
+  --touch-target-min: 44px; /* iOS minimum recommended */
+  --touch-target-comfortable: 48px; /* Material Design recommendation */
+
+  /* Piano Dimensions */
+  --piano-white-key-width: 40px;
+  --piano-white-key-height: 120px;
+  --piano-black-key-width: 25px;
+  --piano-black-key-height: 80px;
+
+  /* Breakpoints (for reference in media queries) */
+  /* --breakpoint-sm: 480px; */
+  /* --breakpoint-md: 768px; */
+  /* --breakpoint-lg: 1024px; */
+  /* --breakpoint-xl: 1280px; */
+
+  /* Blur Effects */
+  --blur-sm: blur(4px);
+  --blur-md: blur(10px);
+  --blur-lg: blur(20px);
+}
+
+/* Mobile-specific overrides */
+@media (max-width: 768px) {
+  :root {
+    --font-size-3xl: 2rem;    /* Slightly smaller on mobile */
+    --font-size-2xl: 1.8rem;
+
+    --piano-white-key-width: 35px;
+    --piano-white-key-height: 100px;
+    --piano-black-key-width: 22px;
+    --piano-black-key-height: 70px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --font-size-3xl: 1.8rem;
+
+    --piano-white-key-width: 30px;
+    --piano-white-key-height: 100px;
+    --piano-black-key-width: 20px;
+    --piano-black-key-height: 70px;
+  }
+}
+
+/* Dark mode support (future enhancement) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Already dark by default, but could add variations */
+  }
+}
+
+/* Reduced motion support (accessibility) */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-fast: 0.01s;
+    --transition-base: 0.01s;
+    --transition-slow: 0.01s;
+  }
+}

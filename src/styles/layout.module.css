@@ -1,0 +1,190 @@
+/**
+ * Layout Module - Main layout components
+ * Mobile-first responsive design
+ */
+
+.header {
+  text-align: center;
+  margin-bottom: var(--space-8);
+  animation: fadeIn 0.5s ease;
+}
+
+.header h1 {
+  font-size: var(--font-size-3xl);
+  margin-bottom: var(--space-3);
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Status indicator */
+.status {
+  background: var(--color-gray-100);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-full);
+  margin-bottom: var(--space-5);
+  backdrop-filter: var(--blur-md);
+  border: 1px solid var(--color-gray-200);
+  font-size: var(--font-size-base);
+  transition: all var(--transition-base);
+}
+
+.status.connected,
+.status.success {
+  background: var(--color-success-light);
+  border-color: var(--color-success);
+}
+
+.status.error {
+  background: var(--color-error-light);
+  border-color: var(--color-error);
+}
+
+.status.info {
+  background: var(--color-gray-200);
+}
+
+/* Clock status indicator */
+.clockStatus {
+  background: var(--color-gray-100);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-2xl);
+  margin-bottom: var(--space-4);
+  backdrop-filter: var(--blur-md);
+  border: 1px solid var(--color-gray-200);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  transition: all var(--transition-slow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.clockStatus.synced {
+  background: var(--color-success-light);
+  border-color: var(--color-success);
+  box-shadow: var(--shadow-glow-success);
+}
+
+.clockStatus.free {
+  background: var(--color-warning-light);
+  border-color: var(--color-warning);
+  box-shadow: var(--shadow-glow-warning);
+}
+
+.clockStatus.stopped {
+  background: var(--color-error-light);
+  border-color: var(--color-error);
+  box-shadow: var(--shadow-glow-error);
+}
+
+/* Beat indicator (animated dot) */
+.beatIndicator {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  display: inline-block;
+}
+
+.beatIndicator.pulse {
+  animation: pulse 0.3s ease-out;
+}
+
+/* Octave display */
+.octaveDisplay {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-success);
+  margin-bottom: var(--space-3);
+  text-align: center;
+}
+
+/* Instructions section */
+.instructions {
+  background: var(--color-gray-100);
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  backdrop-filter: var(--blur-md);
+  max-width: 600px;
+  width: 100%;
+  text-align: center;
+  border: 1px solid var(--color-gray-200);
+  margin-top: var(--space-6);
+}
+
+.instructions h3,
+.instructions h4 {
+  margin-bottom: var(--space-4);
+  font-weight: var(--font-weight-bold);
+}
+
+.instructions h5 {
+  margin-bottom: var(--space-3);
+  color: var(--color-success);
+  font-weight: var(--font-weight-medium);
+}
+
+.instructions p {
+  margin-bottom: var(--space-3);
+  line-height: var(--line-height-relaxed);
+}
+
+.instructions ol {
+  text-align: left;
+  margin: var(--space-3) 0;
+  padding-left: var(--space-5);
+}
+
+.instructions code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+
+.instructionBox {
+  background: var(--color-gray-50);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  margin: var(--space-4) 0;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .header {
+    margin-bottom: var(--space-6);
+  }
+
+  .header h1 {
+    font-size: var(--font-size-2xl);
+  }
+
+  .instructions {
+    max-width: 100%;
+    padding: var(--space-4);
+    text-align: left;
+    font-size: var(--font-size-sm);
+  }
+
+  .instructions h3 {
+    font-size: var(--font-size-lg);
+  }
+
+  .instructions h4 {
+    font-size: var(--font-size-md);
+  }
+}
+
+@media (max-width: 480px) {
+  .header h1 {
+    font-size: var(--font-size-xl);
+  }
+
+  .status {
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-sm);
+  }
+}

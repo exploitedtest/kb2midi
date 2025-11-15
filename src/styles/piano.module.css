@@ -1,0 +1,270 @@
+/**
+ * Piano Module - Piano keyboard and key mapping styles
+ * Mobile-first with touch-friendly interactions
+ */
+
+/* Piano container */
+.pianoContainer {
+  background: rgba(0, 0, 0, 0.2);
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--space-8);
+  backdrop-filter: var(--blur-md);
+  border: 1px solid var(--color-gray-100);
+  animation: slideInUp 0.5s ease;
+}
+
+/* Piano keyboard */
+.piano {
+  display: flex;
+  position: relative;
+  height: var(--piano-white-key-height);
+  margin: var(--space-5) 0;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Piano key base styles */
+.key {
+  border: 1px solid #ccc;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-md);
+  touch-action: manipulation; /* Prevent double-tap zoom */
+}
+
+/* White keys */
+.whiteKey {
+  background: linear-gradient(to bottom, #fff, #f0f0f0);
+  color: #333;
+  width: var(--piano-white-key-width);
+  height: var(--piano-white-key-height);
+  margin-right: 1px;
+  padding-bottom: var(--space-3);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+/* Black keys */
+.blackKey {
+  background: linear-gradient(to bottom, #333, #111);
+  color: var(--color-white);
+  width: var(--piano-black-key-width);
+  height: var(--piano-black-key-height);
+  position: absolute;
+  z-index: var(--z-dropdown);
+  padding-bottom: var(--space-3);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+}
+
+/* Active/pressed states */
+.whiteKey.active {
+  background: linear-gradient(to bottom, var(--color-success), #45a049);
+  color: var(--color-white);
+  transform: scale(0.98);
+  box-shadow: var(--shadow-sm);
+}
+
+.blackKey.active {
+  background: linear-gradient(to bottom, var(--color-info), #1976D2);
+  transform: scale(0.98);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Focus states for accessibility */
+.key:focus-visible {
+  outline: 2px solid var(--color-success);
+  outline-offset: 2px;
+  z-index: var(--z-dropdown);
+}
+
+.whiteKey:focus-visible {
+  background: linear-gradient(to bottom, #e8f5e8, #d0e0d0);
+}
+
+.blackKey:focus-visible {
+  background: linear-gradient(to bottom, #555, #333);
+}
+
+/* Hover states (desktop only) */
+@media (hover: hover) and (pointer: fine) {
+  .key:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+}
+
+/* Key labels */
+.keyLabel {
+  position: absolute;
+  bottom: var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.blackKeyLabel {
+  position: absolute;
+  bottom: var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+  opacity: 0.8;
+  color: rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+}
+
+/* Piano rows (for expanded layout) */
+.pianoRow {
+  display: flex;
+  position: relative;
+  height: var(--piano-white-key-height);
+  margin: var(--space-3) 0;
+}
+
+.topRow {
+  margin-top: var(--space-2);
+}
+
+.bottomRow {
+  margin-top: var(--space-2);
+}
+
+/* Keyboard mapping section */
+.keyboardMapping {
+  background: var(--color-gray-100);
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  backdrop-filter: var(--blur-md);
+  max-width: 800px;
+  width: 100%;
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--color-gray-200);
+}
+
+.keyboardMapping h3 {
+  margin-bottom: var(--space-4);
+  text-align: center;
+  font-weight: var(--font-weight-bold);
+}
+
+/* Keyboard rows in mapping */
+.keyboardRow {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Individual keyboard keys in mapping */
+.kbKey {
+  background: var(--color-gray-200);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  min-width: 40px;
+  text-align: center;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--color-gray-300);
+  margin: var(--space-1);
+}
+
+.kbKey.whiteBg {
+  background: var(--color-gray-300);
+  color: #333;
+  border: 1px solid var(--color-gray-500);
+}
+
+.kbKey.blackBg {
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+}
+
+.kbKey.controlKey {
+  background: var(--color-success-light);
+  color: var(--color-success);
+  border: 1px solid rgba(76, 175, 80, 0.5);
+  font-weight: var(--font-weight-bold);
+}
+
+.kbKey.controlKey.wide {
+  min-width: 120px;
+}
+
+.kbKey.active {
+  background: var(--color-success);
+  color: var(--color-white);
+  transform: scale(0.95);
+  box-shadow: var(--shadow-md);
+}
+
+/* Keyboard wrapper */
+.keyboardWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .pianoContainer {
+    padding: var(--space-3);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  }
+
+  .piano {
+    min-width: 400px;
+  }
+
+  .keyboardMapping {
+    padding: var(--space-4);
+    max-width: 100%;
+    transform: scale(0.9);
+    transform-origin: center top;
+  }
+
+  .kbKey {
+    min-width: 35px;
+    padding: var(--space-2);
+    font-size: var(--font-size-xs);
+  }
+}
+
+@media (max-width: 480px) {
+  .piano {
+    height: 100px;
+    min-width: 350px;
+  }
+
+  .pianoRow {
+    height: 100px;
+  }
+
+  .keyboardMapping {
+    transform: scale(0.75);
+    transform-origin: center top;
+  }
+
+  .kbKey {
+    min-width: 30px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--font-size-xs);
+  }
+}
+
+/* Touch feedback for mobile */
+@media (max-width: 768px) {
+  .key:active {
+    transform: scale(0.96);
+  }
+}

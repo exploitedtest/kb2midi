@@ -1,0 +1,45 @@
+/**
+ * Main CSS Entry Point
+ * Imports all CSS modules and base styles
+ */
+
+/* Import design tokens first */
+@import './variables.css';
+
+/* Import base styles and reset */
+@import './base.css';
+
+/* Component-specific styles are imported as CSS modules in their respective components */
+/* This file handles only global styles and variables */
+
+/* Global z-index layering */
+.header,
+.controls,
+.piano-container,
+.keyboard-mapping,
+.octave-display,
+.clock-status,
+.instructions,
+#midi-help {
+  position: relative;
+  z-index: var(--z-fixed);
+}
+
+/* Smooth transitions for page load */
+body > * {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+
+  .particles-canvas,
+  .controls,
+  button {
+    display: none;
+  }
+}
