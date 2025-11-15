@@ -897,11 +897,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // Resume/cleanup around visibility changes
 // Be conservative in Electron: fullscreen/space transitions on macOS can briefly
 // flip visibility and race with focus events, dropping keyboard listeners.
-// In Electron, avoid full cleanup on visibility hidden; just silence notes.
+// Detect if running in Tauri or Electron
+const inTauri = '__TAURI_INTERNALS__' in window;
+const inElectron = typeof (window as any).electronAPI !== 'undefined';
+const inDesktop = inTauri || inElectron;
+
+// In desktop apps (Tauri/Electron), avoid full cleanup on visibility hidden; just silence notes.
 document.addEventListener('visibilitychange', () => {
-  const inElectron = typeof (window as any).electronAPI !== 'undefined';
   if (document.hidden) {
-    if (inElectron) {
+    if (inDesktop) {
       controller.allNotesOff();
     } else {
       controller.cleanup();
@@ -925,9 +929,31 @@ document.addEventListener('visibilitychange', () => {
     controller.resume();
   });
 
-  // Remove DOM fullscreen handling; OS-native fullscreen is handled by Electron
+  // Remove DOM fullscreen handling; OS-native fullscreen is handled by desktop apps
 
-  // Electron bridge: resume/suspend + app focus hooks if available
+  // Tauri event listeners
+  if (inTauri) {
+    (async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+
+        await listen('app-focus', () => {
+          controller.resume();
+        });
+
+        await listen('app-blur', () => {
+          controller.allNotesOff();
+        });
+
+        // Note: Tauri doesn't have explicit system suspend/resume events
+        // The window focus/blur events handle most cases
+      } catch (err) {
+        console.warn('Failed to set up Tauri event listeners:', err);
+      }
+    })();
+  }
+
+  // Electron bridge: resume/suspend + app focus hooks if available (legacy support)
   const electronAPI = window.electronAPI;
   if (electronAPI) {
     try {

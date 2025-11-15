@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-kb2midi is a TypeScript-based web MIDI controller that transforms QWERTY keyboards into professional MIDI input devices. The application supports both web browser and Electron desktop deployment, featuring advanced capabilities including arpeggiator, clock sync, and multiple keyboard layouts.
+kb2midi is a TypeScript-based web MIDI controller that transforms QWERTY keyboards into professional MIDI input devices. The application supports web browser, Tauri desktop (recommended), and Electron desktop deployment, featuring advanced capabilities including arpeggiator, clock sync, and multiple keyboard layouts.
 
 ## Development Commands
 
@@ -16,7 +16,28 @@ npm run preview       # Preview production build
 npm run type-check    # TypeScript type checking without output
 ```
 
-### Electron Desktop App
+### Tauri Desktop App (Recommended - Small Bundle Size)
+```bash
+npm run tauri-dev         # Run Tauri in development mode
+npm run tauri-build       # Build Tauri distributables for production
+npm run tauri-build-debug # Build Tauri with debug symbols
+```
+
+**Bundle Size Comparison:**
+- Tauri: ~5-15 MB (uses system webview)
+- Electron: ~100-150 MB (bundles Chromium)
+
+**System Requirements for Tauri Build:**
+- **Rust toolchain** (install from https://rustup.rs)
+- **Linux**: GTK3, webkit2gtk development libraries
+  ```bash
+  # Ubuntu/Debian
+  sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev
+  ```
+- **macOS**: Xcode Command Line Tools
+- **Windows**: WebView2 (usually pre-installed on Windows 10/11)
+
+### Electron Desktop App (Legacy)
 ```bash
 npm run electron         # Run Electron with production build
 npm run electron-dev     # Run Electron in development mode
@@ -24,7 +45,7 @@ npm run electron-build   # Build Electron distributables (use EB_ARGS to customi
 npm run electron-pack    # Build universal macOS DMG
 ```
 
-### Platform-Specific Packaging
+### Platform-Specific Electron Packaging
 ```bash
 npm run electron-pack-mac-arm64 # macOS Apple Silicon (arm64) DMG
 npm run electron-pack-win      # Windows NSIS installer
@@ -136,7 +157,8 @@ The Web MIDI API cannot create MIDI devices visible to other applications. Users
 
 ### Suspend/Resume System
 - **Web Browser**: Handles page visibility changes, focus/blur events, and bfcache navigation
-- **Electron Desktop**: Integrates with system power management and application focus events
+- **Tauri Desktop**: Integrates with window focus/blur events for desktop lifecycle management
+- **Electron Desktop (Legacy)**: Integrates with system power management and application focus events
 - **Cleanup Process**: Stops all notes, clears MIDI connections, removes event listeners, resets controllers
 - **Resume Process**: Reinitializes MIDI connections, reattaches event handlers, refreshes device lists, restores UI state
 - **Safety Measures**: All-notes-off, sustain pedal reset, mod wheel/pitch bend reset on blur/suspend
@@ -146,16 +168,23 @@ The Web MIDI API cannot create MIDI devices visible to other applications. Users
 - **Smart Fallback**: Auto-switches to best available device when selected device disconnects
 - **UI Synchronization**: Updates device dropdowns in real-time without user intervention
 
+### Desktop App Features
+- **Always on Top**: Window stays above other applications (configurable via menu/tray)
+- **System Tray**: Minimize to tray with quick access menu
+- **Single Instance**: Only one instance of the app can run at a time
+- **Native Menus**: Platform-appropriate menu bars and context menus
+
 ## Testing Approach
 
 No formal test framework is configured. Testing is performed by:
 1. **Web Testing**: `npm run dev` + virtual MIDI port connection, verify note on/off, sustain, octave controls, arpeggiator, and clock sync
-2. **Electron Testing**: `npm run electron-dev`, confirm window behavior, "Always on Top" functionality, and MIDI access
-3. **MIDI Verification**: Use DAW software or MIDI monitor applications to validate output
-4. **Console Monitoring**: Check browser/Electron console for errors during testing
-5. **Cross-platform testing**: macOS, Windows, and Linux compatibility
-6. **Browser compatibility**: Chrome, Safari, Edge (Firefox not supported)
-7. **Power management**: Suspend/resume, focus/blur scenarios
+2. **Tauri Testing**: `npm run tauri-dev`, confirm window behavior, "Always on Top" functionality, tray icon, and MIDI access
+3. **Electron Testing (Legacy)**: `npm run electron-dev`, confirm window behavior, "Always on Top" functionality, and MIDI access
+4. **MIDI Verification**: Use DAW software or MIDI monitor applications to validate output
+5. **Console Monitoring**: Check browser/desktop app console for errors during testing
+6. **Cross-platform testing**: macOS, Windows, and Linux compatibility
+7. **Browser compatibility**: Chrome, Safari, Edge (Firefox not supported)
+8. **Power management**: Suspend/resume, focus/blur scenarios
 8. **Device hot-plug**: Connect/disconnect during operation
 
 ## Build System
