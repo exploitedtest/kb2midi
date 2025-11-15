@@ -43,7 +43,8 @@ class MIDIController {
     pressedKeys: new Set(),
     sustainPedalActive: false,
     sustainedNotes: new Set(),
-    currentLayout: 'expanded'
+    currentLayout: 'expanded',
+    noteInputSource: 'keyboard' // Default to QWERTY keyboard
   };
 
   constructor() {
@@ -89,6 +90,9 @@ class MIDIController {
       this.uiController.updateStatus(error.message, 'error');
     });
 
+    // Set up external MIDI note input handlers
+    this.setupExternalMIDIHandlers();
+
     // Set up clock sync callbacks
     this.setupClockSyncCallbacks();
 
@@ -122,16 +126,54 @@ class MIDIController {
     this.refreshClockInputs();
     this.uiController.onClockInputChange((id) => this.handleClockInputSelect(id));
 
+    // Populate note input sources and wire selection
+    this.refreshNoteInputSources();
+    this.uiController.onNoteInputChange((source) => this.handleNoteInputSelect(source));
+
     // React to MIDI port changes (hot-plug, DAW devices on/off)
     this.midiEngine.onPortsChangeHandler(() => {
       this.refreshClockInputs();
+      this.refreshNoteInputSources();
+
       const inputs = this.midiEngine.getAvailableInputs();
+
+      // Handle clock input device disconnection
       if (this.preferredClockInputId === 'auto') {
         this.midiEngine.selectBestClockInput();
       } else if (!inputs.find(i => i.id === this.preferredClockInputId)) {
         this.midiEngine.selectBestClockInput();
         this.preferredClockInputId = 'auto';
         this.refreshClockInputs();
+      }
+
+      // Handle note input device disconnection
+      if (this.state.noteInputSource === 'external') {
+        const currentNoteInput = this.midiEngine.getNoteInput();
+        if (currentNoteInput && !inputs.find(i => i.id === currentNoteInput.id)) {
+          // External device disconnected, fall back to keyboard
+          this.handleNoteInputSelect('keyboard');
+        }
+      }
+    });
+  }
+
+  /**
+   * Sets up external MIDI input handlers for note on/off events
+   */
+  private setupExternalMIDIHandlers(): void {
+    this.midiEngine.onExternalNoteOnHandler((note, velocity, _channel) => {
+      // Only process external MIDI when in external mode
+      if (this.state.noteInputSource === 'external') {
+        this.playNote(note, velocity);
+        this.uiController.updateKeyVisual(`external-${note}`, true);
+      }
+    });
+
+    this.midiEngine.onExternalNoteOffHandler((note, _velocity, _channel) => {
+      // Only process external MIDI when in external mode
+      if (this.state.noteInputSource === 'external') {
+        this.stopNote(note);
+        this.uiController.updateKeyVisual(`external-${note}`, false);
       }
     });
   }
@@ -783,6 +825,8 @@ class MIDIController {
 
       // Refresh clock inputs and reselect
       this.refreshClockInputs();
+      this.refreshNoteInputSources();
+
       if (this.preferredClockInputId === 'auto') {
         this.midiEngine.selectBestClockInput();
       } else {
@@ -794,6 +838,24 @@ class MIDIController {
           this.midiEngine.selectBestClockInput();
           this.preferredClockInputId = 'auto';
           this.refreshClockInputs();
+        }
+      }
+
+      // Re-attach external MIDI handlers after resume
+      this.setupExternalMIDIHandlers();
+
+      // Restore note input selection
+      if (this.state.noteInputSource === 'keyboard') {
+        this.midiEngine.setNoteInput(null);
+        this.keyboardInput.attach();
+      } else {
+        // Try to restore external MIDI input, fallback to keyboard if device not available
+        const inputs = this.midiEngine.getAvailableInputs();
+        const previousInput = this.midiEngine.getNoteInput();
+        if (previousInput && inputs.find(i => i.id === previousInput.id)) {
+          this.midiEngine.setNoteInput(previousInput);
+        } else {
+          this.handleNoteInputSelect('keyboard');
         }
       }
 
@@ -878,6 +940,48 @@ class MIDIController {
       this.midiEngine.selectBestClockInput();
       this.preferredClockInputId = 'auto';
       this.refreshClockInputs();
+    }
+  }
+
+  /**
+   * Update UI with current MIDI note input sources
+   */
+  private refreshNoteInputSources(): void {
+    const inputs = this.midiEngine.getAvailableInputs();
+    const options = [
+      { id: 'keyboard', name: 'QWERTY Keyboard' },
+      ...inputs.map(i => ({ id: i.id, name: i.name || i.id }))
+    ];
+    this.uiController.populateNoteInputs(options, this.state.noteInputSource === 'keyboard' ? 'keyboard' : this.midiEngine.getNoteInput()?.id || 'keyboard');
+  }
+
+  /**
+   * Handle user selection of note input source
+   */
+  private handleNoteInputSelect(sourceId: string): void {
+    if (sourceId === 'keyboard') {
+      // Switch to keyboard mode
+      this.state.noteInputSource = 'keyboard';
+      this.midiEngine.setNoteInput(null);
+      this.keyboardInput.attach(); // Re-enable keyboard listeners
+      this.uiController.updateStatus('Note Input: QWERTY Keyboard', 'info');
+    } else {
+      // Switch to external MIDI mode
+      this.state.noteInputSource = 'external';
+      const inputs = this.midiEngine.getAvailableInputs();
+      const found = inputs.find(i => i.id === sourceId);
+      if (found) {
+        this.midiEngine.setNoteInput(found);
+        this.keyboardInput.cleanup(); // Disable keyboard listeners to avoid conflicts
+        this.uiController.updateStatus(`Note Input: ${found.name || 'External MIDI'}`, 'info');
+      } else {
+        // Fallback to keyboard if device not found
+        this.state.noteInputSource = 'keyboard';
+        this.midiEngine.setNoteInput(null);
+        this.keyboardInput.attach();
+        this.refreshNoteInputSources();
+        this.uiController.updateStatus('Note Input: QWERTY Keyboard (device not found)', 'info');
+      }
     }
   }
 }

@@ -30,7 +30,7 @@
     "electron-pack-mas-arm64": "MAS=1 npm run build && electron-builder --mac mas --arm64 --publish=never"
   },
   "devDependencies": {
-    "@types/webmidi": "^2.0.10",
+    "@types/webmidi": "^2.1.0",
     "electron": "^38.1.0",
     "electron-builder": "^26.0.12",
     "http-server": "^14.1.1",
