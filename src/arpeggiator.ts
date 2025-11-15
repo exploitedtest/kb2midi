@@ -18,9 +18,148 @@ export interface TimingStrategy {
 /**
  * Straight Timing - No offset, mechanical precision
  */
-class StraightTiming implements TimingStrategy {
+export class StraightTiming implements TimingStrategy {
   getDelayOffset(): number {
     return 0;
+  }
+}
+
+/**
+ * Swing Timing - Delays offbeat steps (odd steps) to create swing feel
+ * Classic swing delays the "ands" (8th note upbeats) by up to 50% of the step time
+ */
+export class SwingTiming implements TimingStrategy {
+  private amount: number;
+
+  constructor(amount: number) {
+    // Clamp amount to 0-1 range
+    this.amount = Math.max(0, Math.min(1, amount));
+  }
+
+  getDelayOffset(globalStep: number, baseStepMs: number): number {
+    // Only delay odd-numbered steps (the upbeats/offbeats)
+    if (globalStep % 2 === 0) {
+      return 0; // Even steps play on time
+    }
+
+    // Delay odd steps by up to 50% of the step duration
+    // This creates the classic swing feel where downbeats are tight,
+    // upbeats are laid back
+    return baseStepMs * 0.5 * this.amount;
+  }
+}
+
+/**
+ * Shuffle Timing - Triplet feel (delays offbeats to 2/3 position)
+ * Creates a triplet feel where the offbeat lands on the last triplet subdivision
+ * More pronounced than regular swing
+ */
+export class ShuffleTiming implements TimingStrategy {
+  private amount: number;
+
+  constructor(amount: number) {
+    this.amount = Math.max(0, Math.min(1, amount));
+  }
+
+  getDelayOffset(globalStep: number, baseStepMs: number): number {
+    // Only delay odd steps (offbeats)
+    if (globalStep % 2 === 0) {
+      return 0; // Even steps on time
+    }
+
+    // Delay to approximately 66.67% of the step (2:1 triplet ratio)
+    // This is more aggressive than regular swing (50%)
+    const tripletPosition = baseStepMs * (2/3);
+    return tripletPosition * this.amount;
+  }
+}
+
+/**
+ * Dotted Timing - Delays offbeats to 75% position (dotted 8th feel)
+ * Creates a dotted eighth note feel, more extreme than shuffle
+ * Offbeat lands on the last 16th of the beat
+ */
+export class DottedTiming implements TimingStrategy {
+  private amount: number;
+
+  constructor(amount: number) {
+    this.amount = Math.max(0, Math.min(1, amount));
+  }
+
+  getDelayOffset(globalStep: number, baseStepMs: number): number {
+    // Only delay odd steps
+    if (globalStep % 2 === 0) {
+      return 0;
+    }
+
+    // Delay to 75% of the step (dotted eighth note timing)
+    // Most extreme of the swing variations
+    const dottedPosition = baseStepMs * 0.75;
+    return dottedPosition * this.amount;
+  }
+}
+
+/**
+ * Humanize Timing - Adds random timing variation to each step
+ * Creates a more human, less robotic feel by randomly shifting timing
+ * Can shift both early (negative offset) and late (positive offset)
+ */
+export class HumanizeTiming implements TimingStrategy {
+  private maxVariationMs: number;
+  private seed: number;
+
+  constructor(amount: number, seed?: number) {
+    const clamped = Math.max(0, Math.min(1, amount));
+    // Map amount (0-1) to max variation of 0-15ms
+    // 15ms is noticeable but not sloppy
+    this.maxVariationMs = clamped * 15;
+    // Use provided seed or generate random one for consistency
+    this.seed = seed ?? Math.random() * 1000000;
+  }
+
+  /**
+   * Simple seeded random number generator for consistent timing patterns
+   * Returns value between 0 and 1
+   */
+  private seededRandom(index: number): number {
+    const x = Math.sin(this.seed + index * 12.9898) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  getDelayOffset(globalStep: number, _baseStepMs: number): number {
+    if (this.maxVariationMs === 0) {
+      return 0;
+    }
+
+    // Generate consistent variation for this step (-1 to 1)
+    const variation = (this.seededRandom(globalStep) - 0.5) * 2;
+
+    // Apply variation (-maxVariationMs to +maxVariationMs)
+    // Negative values mean play early, positive means play late
+    return variation * this.maxVariationMs;
+  }
+}
+
+/**
+ * Layered Timing - Combines multiple timing strategies
+ * Useful for combining rhythmic feel (swing/shuffle/dotted) with humanization
+ * Example: SwingTiming + HumanizeTiming = groovy but loose feel
+ */
+export class LayeredTiming implements TimingStrategy {
+  private strategies: TimingStrategy[];
+
+  constructor(strategies: TimingStrategy[]) {
+    this.strategies = strategies;
+  }
+
+  getDelayOffset(globalStep: number, baseStepMs: number): number {
+    // Sum all timing offsets
+    // This is musically correct: swing provides the rhythmic pattern,
+    // humanize adds random variation on top of it
+    return this.strategies.reduce(
+      (total, strategy) => total + strategy.getDelayOffset(globalStep, baseStepMs),
+      0
+    );
   }
 }
 
