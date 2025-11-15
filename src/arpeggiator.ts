@@ -2,6 +2,29 @@ import { ArpeggiatorState, ArpeggiatorPattern, IMidiEngine } from './types';
 import { ClockSync } from './clock-sync';
 
 /**
+ * Timing Strategy Interface
+ * Calculates timing offset (in ms) for a given step to create different musical feels
+ */
+export interface TimingStrategy {
+  /**
+   * Calculate the delay offset for a step
+   * @param globalStep - The global step counter (for patterns that need absolute position)
+   * @param baseStepMs - The base duration of one step in milliseconds
+   * @returns Delay offset in milliseconds (can be negative for early playback)
+   */
+  getDelayOffset(globalStep: number, baseStepMs: number): number;
+}
+
+/**
+ * Straight Timing - No offset, mechanical precision
+ */
+class StraightTiming implements TimingStrategy {
+  getDelayOffset(): number {
+    return 0;
+  }
+}
+
+/**
  * Arpeggiator that syncs to external MIDI clock
  * Generates arpeggio patterns based on held notes and external timing
  * 
@@ -38,6 +61,8 @@ export class Arpeggiator {
   private lastProcessedTick: number = -1;
   private getChannel: (() => number) | null = null;
   private getVelocity: (() => number) | null = null;
+  private stepCounter: number = 0; // Global step counter for timing patterns
+  private timingStrategy: TimingStrategy = new StraightTiming(); // Default: no timing offset
 
   constructor(clockSync: ClockSync) {
     this.clockSync = clockSync;
@@ -71,6 +96,7 @@ export class Arpeggiator {
       if (this.state.enabled) {
         this.state.currentStep = 0;
         this.lastProcessedTick = -1;
+        this.stepCounter = 0; // Reset global step counter for timing patterns
       }
     });
   }
@@ -106,6 +132,9 @@ export class Arpeggiator {
       this.clearAllTimeouts();
       this.stopAllNotes();
       this.state.currentStep = 0;
+      this.stepCounter = 0; // Reset step counter
+    } else {
+      this.stepCounter = 0; // Reset on enable too
     }
   }
 
@@ -136,9 +165,18 @@ export class Arpeggiator {
 
   /**
    * Sets the swing amount (0-1)
+   * NOTE: Deprecated - use setTimingStrategy() instead
    */
   setSwing(swing: number): void {
     this.state.swing = Math.max(0, Math.min(1, swing));
+  }
+
+  /**
+   * Sets the timing strategy for the arpeggiator
+   * @param strategy - TimingStrategy instance (null = straight timing)
+   */
+  setTimingStrategy(strategy: TimingStrategy | null): void {
+    this.timingStrategy = strategy ?? new StraightTiming();
   }
 
   /**
@@ -205,6 +243,7 @@ export class Arpeggiator {
   /**
    * SIMPLIFIED: Just plays the current step - no advancement logic
    * NEW: Supports sliding window with notesPerStep parameter
+   * Uses timing strategy to calculate playback offset for swing/shuffle/etc.
    */
   private playCurrentStep(): void {
     if (this.state.noteOrder.length === 0) return;
@@ -220,7 +259,13 @@ export class Arpeggiator {
       const stepTimeMs = this.getStepTimeMs();
       const gateTime = Math.min(this.calculateGateTime(), Math.max(0, stepTimeMs - 2)); // leave a tiny headroom to avoid overlap
 
-      if (this.state.pattern === 'chord' || this.state.pattern === 'stacked-chord') {
+      // Calculate timing offset using strategy
+      const timingOffset = this.timingStrategy.getDelayOffset(this.stepCounter, stepTimeMs);
+      const playbackDelay = Math.max(0, timingOffset); // Clamp to 0 minimum for setTimeout
+
+      // Execute note playback after timing offset
+      const executePlayback = () => {
+        if (this.state.pattern === 'chord' || this.state.pattern === 'stacked-chord') {
         // Chord modes: play ALL notes simultaneously (ignores notesPerStep)
         const notesToPlay = this.state.pattern === 'chord'
           ? [...this.state.noteOrder]
@@ -260,7 +305,21 @@ export class Arpeggiator {
             }
           });
         });
+        }
+      };
+
+      // Schedule playback with timing offset
+      if (playbackDelay > 0) {
+        const timeout = setTimeout(executePlayback, playbackDelay);
+        this.activeTimeouts.add(timeout);
+      } else {
+        // No delay, execute immediately
+        executePlayback();
       }
+
+      // Increment step counter for timing patterns
+      this.stepCounter++;
+
     } catch (error) {
       console.error('Error playing arpeggiator step:', error);
     }
