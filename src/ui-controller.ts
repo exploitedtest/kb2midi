@@ -50,6 +50,7 @@ export class UIController {
   private responsiveUI: ResponsiveUI;
   private mobileSettingsPanel: HTMLElement | null = null;
   private mobileMenuToggle: HTMLElement | null = null;
+  private shakeIndicator: HTMLElement | null = null;
 
   constructor() {
     this.pianoContainer = document.getElementById('piano')!;
@@ -73,6 +74,7 @@ export class UIController {
     this.setupResponsiveUI();
 
     this.createClockStatusElement();
+    this.createShakeIndicator();
     this.setupUIEventListeners();
     this.setupButtonPressEffects();
     this.initializeControls();
@@ -979,6 +981,24 @@ export class UIController {
   }
 
   /**
+   * Creates the shake indicator element
+   */
+  private createShakeIndicator(): void {
+    // Create shake indicator element
+    this.shakeIndicator = document.createElement('div');
+    this.shakeIndicator.id = 'shake-indicator';
+    this.shakeIndicator.className = 'shake-indicator mobile-only';
+    this.shakeIndicator.innerHTML = '📳 Shake to stop all notes';
+    this.shakeIndicator.style.display = 'none';
+
+    // Insert after octave display
+    this.octaveDisplay.parentNode?.insertBefore(
+      this.shakeIndicator,
+      this.octaveDisplay.nextSibling
+    );
+  }
+
+  /**
    * Sets up responsive UI behavior
    */
   private setupResponsiveUI(): void {
@@ -1161,6 +1181,45 @@ export class UIController {
         }
       }, { passive: true });
     }
+  }
+
+  /**
+   * Enables shake detection for panic functionality
+   * Call this after the panic button handler is set up
+   */
+  enableShakeDetection(panicHandler: () => void): void {
+    this.responsiveUI.enableShakeDetection(() => {
+      // Visual feedback
+      this.showShakeActivation();
+
+      // Trigger panic
+      panicHandler();
+    });
+
+    // Show the shake indicator hint on mobile
+    if (this.responsiveUI.isMobile() && this.shakeIndicator) {
+      this.shakeIndicator.style.display = 'block';
+    }
+  }
+
+  /**
+   * Shows visual feedback when shake is detected
+   */
+  private showShakeActivation(): void {
+    if (!this.shakeIndicator) return;
+
+    // Animate the shake indicator
+    this.shakeIndicator.classList.add('shake-active');
+
+    // Vibrate if supported
+    if ('vibrate' in navigator) {
+      navigator.vibrate([50, 50, 50]); // Triple pulse
+    }
+
+    // Remove animation class after animation completes
+    setTimeout(() => {
+      this.shakeIndicator?.classList.remove('shake-active');
+    }, 500);
   }
 
   /**

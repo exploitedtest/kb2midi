@@ -100,15 +100,22 @@ class MIDIController {
     
     // Set up UI handlers
     this.setupUIHandlers();
-    
+
     // Wire up velocity changes to keyboard input
     this.uiController.onVelocityChange((velocity) => {
       this.keyboardInput.setVelocity(velocity);
     });
-    
+
     // Initialize keyboard input velocity to match UI default
     this.keyboardInput.setVelocity(this.uiController.getVelocity());
-    
+
+    // Enable shake detection for mobile panic functionality
+    this.uiController.enableShakeDetection(() => {
+      this.stopAllNotes();
+      this.midiEngine.panic(this.uiController.getMidiChannel());
+      this.uiController.updateStatus('Shake detected - All notes stopped', 'info');
+    });
+
     // Initialize UI
     this.updateUI();
 

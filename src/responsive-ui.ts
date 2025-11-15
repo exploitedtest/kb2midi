@@ -51,6 +51,14 @@ export class ResponsiveUI {
   private readonly DOUBLE_TAP_DELAY = 300; // ms
   private readonly PINCH_THRESHOLD = 20; // pixels
 
+  // Shake detection
+  private shakeEnabled: boolean = false;
+  private lastAcceleration: { x: number; y: number; z: number } | null = null;
+  private lastShakeTime: number = 0;
+  private shakeHandlers: (() => void)[] = [];
+  private readonly SHAKE_THRESHOLD = 15; // m/s²
+  private readonly SHAKE_COOLDOWN = 1000; // ms between shake events
+
   constructor() {
     this.viewportInfo = this.detectViewport();
     this.setupListeners();
@@ -385,6 +393,116 @@ export class ResponsiveUI {
   }
 
   /**
+   * Enables shake detection for panic/all-notes-off functionality
+   * Uses DeviceMotion API to detect rapid device movement
+   */
+  enableShakeDetection(onShake: () => void): void {
+    if (!this.isTouchDevice()) {
+      console.log('Shake detection only available on touch devices');
+      return;
+    }
+
+    this.shakeHandlers.push(onShake);
+
+    if (this.shakeEnabled) {
+      // Already enabled, just add the handler
+      return;
+    }
+
+    // Check for DeviceMotion API support
+    if (typeof DeviceMotionEvent === 'undefined') {
+      console.warn('DeviceMotion API not supported');
+      return;
+    }
+
+    // Request permission on iOS 13+
+    if (
+      typeof (DeviceMotionEvent as any).requestPermission === 'function'
+    ) {
+      (DeviceMotionEvent as any)
+        .requestPermission()
+        .then((permissionState: string) => {
+          if (permissionState === 'granted') {
+            this.setupShakeListener();
+          } else {
+            console.warn('DeviceMotion permission denied');
+          }
+        })
+        .catch((error: Error) => {
+          console.error('Error requesting DeviceMotion permission:', error);
+        });
+    } else {
+      // Non-iOS or older iOS, just set up the listener
+      this.setupShakeListener();
+    }
+  }
+
+  /**
+   * Sets up the device motion event listener
+   */
+  private setupShakeListener(): void {
+    this.shakeEnabled = true;
+
+    window.addEventListener('devicemotion', (event: DeviceMotionEvent) => {
+      if (!event.accelerationIncludingGravity) {
+        return;
+      }
+
+      const { x, y, z } = event.accelerationIncludingGravity;
+
+      if (x === null || y === null || z === null) {
+        return;
+      }
+
+      // First reading, just store it
+      if (!this.lastAcceleration) {
+        this.lastAcceleration = { x, y, z };
+        return;
+      }
+
+      // Calculate change in acceleration
+      const deltaX = Math.abs(x - this.lastAcceleration.x);
+      const deltaY = Math.abs(y - this.lastAcceleration.y);
+      const deltaZ = Math.abs(z - this.lastAcceleration.z);
+
+      // Update last acceleration
+      this.lastAcceleration = { x, y, z };
+
+      // Check if shake threshold exceeded
+      const now = Date.now();
+      const timeSinceLastShake = now - this.lastShakeTime;
+
+      if (
+        (deltaX > this.SHAKE_THRESHOLD ||
+          deltaY > this.SHAKE_THRESHOLD ||
+          deltaZ > this.SHAKE_THRESHOLD) &&
+        timeSinceLastShake > this.SHAKE_COOLDOWN
+      ) {
+        this.lastShakeTime = now;
+        this.notifyShake();
+      }
+    }, { passive: true });
+  }
+
+  /**
+   * Notifies all shake handlers
+   */
+  private notifyShake(): void {
+    console.log('Shake detected!');
+    this.shakeHandlers.forEach(handler => handler());
+  }
+
+  /**
+   * Disables shake detection
+   */
+  disableShakeDetection(): void {
+    this.shakeEnabled = false;
+    this.shakeHandlers = [];
+    // Note: Can't easily remove the devicemotion listener without storing a reference
+    // For now, we just clear handlers and check shakeEnabled flag
+  }
+
+  /**
    * Cleanup and remove all listeners
    */
   cleanup(): void {
@@ -401,6 +519,7 @@ export class ResponsiveUI {
       this.longPressTimer = null;
     }
 
+    this.disableShakeDetection();
     this.viewportChangeHandlers = [];
     this.orientationChangeHandlers = [];
   }

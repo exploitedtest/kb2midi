@@ -481,6 +481,39 @@ input:focus, select:focus {
     display: block;
 }
 
+/* Shake indicator */
+.shake-indicator {
+    background: rgba(76, 175, 80, 0.15);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    padding: 8px 16px;
+    border-radius: 20px;
+    margin: 8px 0;
+    font-size: 13px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.9);
+    transition: all 0.3s ease;
+}
+
+.shake-indicator.shake-active {
+    background: rgba(76, 175, 80, 0.5);
+    border-color: #4CAF50;
+    box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+    transform: scale(1.1);
+    animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+    0%, 100% {
+        transform: translateX(0) scale(1.1);
+    }
+    10%, 30%, 50%, 70%, 90% {
+        transform: translateX(-5px) scale(1.1);
+    }
+    20%, 40%, 60%, 80% {
+        transform: translateX(5px) scale(1.1);
+    }
+}
+
 /* Mobile-optimized compact controls */
 .mobile-controls {
     width: 100%;
