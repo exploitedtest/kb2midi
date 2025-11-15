@@ -13,6 +13,61 @@
     </div>
 
     <div class="controls">
+        <!-- Collaborative Mode Controls -->
+        <div class="control-group collab-controls">
+            <label>Mode</label>
+            <select id="mode-select">
+                <option value="solo" selected>Solo (Local)</option>
+                <option value="teacher">Teacher (Classroom)</option>
+                <option value="student">Student (Classroom)</option>
+            </select>
+        </div>
+
+        <div id="network-controls" class="control-group" style="display: none;">
+            <label for="server-url">Server URL</label>
+            <input type="text" id="server-url" value="http://localhost:3000" placeholder="http://localhost:3000">
+            <input type="text" id="user-name" placeholder="Your Name" style="margin-top: 5px;">
+            <button id="connect-button">Connect</button>
+            <div id="network-status" style="margin-top: 5px; font-size: 0.9em;"></div>
+        </div>
+
+        <!-- Student Status Display -->
+        <div id="student-status" class="student-status" style="display: none;">
+            <div class="student-section-badge">
+                <span id="student-section-name">Unassigned</span>
+            </div>
+            <div id="student-mute-indicator" style="display: none; color: #ff4444;">🔇 Muted</div>
+        </div>
+
+        <!-- Teacher Control Panel -->
+        <div id="teacher-panel" class="teacher-panel" style="display: none;">
+            <h3>Teacher Controls</h3>
+
+            <div class="teacher-section">
+                <h4>Master Controls</h4>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="teacher-start-clock">▶️ Start Clock</button>
+                    <button id="teacher-stop-clock">⏹️ Stop Clock</button>
+                    <button id="teacher-mute-all">🔇 Mute All</button>
+                </div>
+                <div style="margin-top: 10px;">
+                    <label>Server BPM:</label>
+                    <input type="number" id="teacher-bpm" min="40" max="300" value="120" style="width: 70px;">
+                    <button id="teacher-set-bpm">Set BPM</button>
+                </div>
+            </div>
+
+            <div class="teacher-section">
+                <h4>Sections</h4>
+                <div id="sections-list"></div>
+            </div>
+
+            <div class="teacher-section">
+                <h4>Students (<span id="student-count">0</span>)</h4>
+                <div id="students-list" class="students-list"></div>
+            </div>
+        </div>
+
         <div class="control-group">
             <label for="velocity">Velocity</label>
             <input type="range" id="velocity" min="1" max="127" value="80">

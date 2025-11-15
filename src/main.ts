@@ -3,6 +3,7 @@ import { KeyboardInput } from './keyboard-input';
 import { UIController } from './ui-controller';
 import { ClockSync } from './clock-sync';
 import { Arpeggiator } from './arpeggiator';
+import { CollaborativeController } from './collaborative-controller';
 import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
 
 // Enhanced control configuration with better type safety
@@ -25,6 +26,7 @@ class MIDIController {
   private uiController: UIController;
   private clockSync: ClockSync;
   private arpeggiator: Arpeggiator;
+  private collaborativeController: CollaborativeController;
   private isActive = false;
   // Tracks whether the app is in its initial async initialization
   private initializing = true;
@@ -52,7 +54,8 @@ class MIDIController {
     this.keyboardInput = new KeyboardInput();
     this.uiController = new UIController();
     this.arpeggiator = new Arpeggiator(this.clockSync);
-    
+    this.collaborativeController = new CollaborativeController();
+
     this.initialize();
   }
 
@@ -95,6 +98,10 @@ class MIDIController {
     // Set up arpeggiator
     this.setupArpeggiator();
 
+    // Set up collaborative controller
+    this.collaborativeController.setMidiEngine(this.midiEngine);
+    this.collaborativeController.setMidiChannel(this.uiController.getMidiChannel());
+
     // Set up keyboard input handlers
     this.setupKeyboardHandlers();
     
@@ -105,7 +112,12 @@ class MIDIController {
     this.uiController.onVelocityChange((velocity) => {
       this.keyboardInput.setVelocity(velocity);
     });
-    
+
+    // Wire up MIDI channel changes to collaborative controller
+    this.uiController.onChannelChange((channel) => {
+      this.collaborativeController.setMidiChannel(channel);
+    });
+
     // Initialize keyboard input velocity to match UI default
     this.keyboardInput.setVelocity(this.uiController.getVelocity());
     
@@ -483,13 +495,18 @@ class MIDIController {
     if (this.arpeggiator.isEnabled()) {
       // When arpeggiator is enabled, add note to sequence in press order
       this.arpeggiator.addNote(note);
-      
+
       // Update visual feedback to show key is "held" for arpeggiator
       this.uiController.updatePianoKey(note, true);
     } else {
       // When arpeggiator is disabled, play note immediately (normal behavior)
       this.midiEngine.playNote(note, velocity, channel);
       this.uiController.updatePianoKey(note, true);
+    }
+
+    // Send note to network if in collaborative mode
+    if (this.collaborativeController.isCollaborative()) {
+      this.collaborativeController.sendNoteOn(note, velocity);
     }
   }
 
@@ -509,7 +526,7 @@ class MIDIController {
       this.arpeggiator.removeNote(note);
       this.state.activeNotes.delete(note.toString());
       this.uiController.updatePianoKey(note, false);
-      } else {
+    } else {
       // Normal behavior when arpeggiator is disabled
       if (this.state.sustainPedalActive) {
         this.state.sustainedNotes.add(note);
@@ -519,6 +536,11 @@ class MIDIController {
         this.state.activeNotes.delete(note.toString());
         this.uiController.updatePianoKey(note, false);
       }
+    }
+
+    // Send note off to network if in collaborative mode
+    if (this.collaborativeController.isCollaborative()) {
+      this.collaborativeController.sendNoteOff(note);
     }
   }
 
@@ -735,7 +757,10 @@ class MIDIController {
     
     // Clean up clock sync callbacks
     this.clockSync.clearCallbacks();
-    
+
+    // Clean up collaborative controller
+    this.collaborativeController.cleanup();
+
     // Clear local state
     this.state.activeNotes.clear();
     this.state.sustainedNotes.clear();

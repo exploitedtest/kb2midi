@@ -1,0 +1,30 @@
+{
+  "name": "kb2midi-server",
+  "version": "1.0.0",
+  "description": "Collaborative MIDI server for classroom music performance",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "midi",
+    "collaborative",
+    "classroom",
+    "websocket",
+    "music-education"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

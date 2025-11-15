@@ -29,6 +29,9 @@
     "electron-pack-mas": "MAS=1 npm run build && electron-builder --mac mas --publish=never",
     "electron-pack-mas-arm64": "MAS=1 npm run build && electron-builder --mac mas --arm64 --publish=never"
   },
+  "dependencies": {
+    "socket.io-client": "^4.7.2"
+  },
   "devDependencies": {
     "@types/webmidi": "^2.0.10",
     "electron": "^38.1.0",

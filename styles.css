@@ -555,3 +555,215 @@ input:focus, select:focus {
         font-size: 10px;
     }
 }
+
+/* Collaborative Mode Styles */
+
+.teacher-panel {
+    background: rgba(255,255,255,0.1);
+    padding: 20px;
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    margin: 15px 0;
+    width: 100%;
+    max-width: 800px;
+}
+
+.teacher-panel h3 {
+    margin-bottom: 15px;
+    color: #4CAF50;
+    text-align: center;
+}
+
+.teacher-section {
+    background: rgba(255,255,255,0.05);
+    padding: 15px;
+    border-radius: 10px;
+    margin: 10px 0;
+}
+
+.teacher-section h4 {
+    margin-bottom: 10px;
+    color: #FFC107;
+}
+
+.students-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.student-item {
+    background: rgba(255,255,255,0.1);
+    padding: 10px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 4px solid;
+    transition: all 0.2s ease;
+}
+
+.student-item:hover {
+    background: rgba(255,255,255,0.15);
+}
+
+.student-item.muted {
+    opacity: 0.5;
+}
+
+.student-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.student-name {
+    font-weight: bold;
+}
+
+.student-notes {
+    font-size: 0.85em;
+    opacity: 0.8;
+    font-family: monospace;
+}
+
+.student-controls {
+    display: flex;
+    gap: 5px;
+}
+
+.student-controls button {
+    padding: 5px 10px;
+    font-size: 0.85em;
+}
+
+.section-item {
+    background: rgba(255,255,255,0.1);
+    padding: 12px;
+    border-radius: 8px;
+    margin: 8px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 6px solid;
+}
+
+.section-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.section-name {
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.section-count {
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+.section-controls button {
+    padding: 5px 12px;
+    font-size: 0.85em;
+}
+
+.student-status {
+    background: rgba(255,255,255,0.1);
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+    margin: 10px 0;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.student-section-badge {
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 1.2em;
+    margin-bottom: 10px;
+    display: inline-block;
+}
+
+#network-controls input[type="text"],
+#network-controls input[type="number"] {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 5px;
+    width: 100%;
+    margin-bottom: 5px;
+}
+
+#network-controls input::placeholder {
+    color: rgba(255,255,255,0.5);
+}
+
+#network-status {
+    padding: 8px;
+    border-radius: 5px;
+    text-align: center;
+    font-weight: bold;
+}
+
+#network-status.connected {
+    background: rgba(76, 175, 80, 0.3);
+    color: #4CAF50;
+}
+
+#network-status.disconnected {
+    background: rgba(244, 67, 54, 0.3);
+    color: #f44336;
+}
+
+#network-status.connecting {
+    background: rgba(255, 193, 7, 0.3);
+    color: #FFC107;
+}
+
+/* Multi-client note visualization */
+.key.client-note {
+    box-shadow: 0 0 15px;
+}
+
+.key.client-note::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: currentColor;
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+/* Mobile optimizations for collaborative mode */
+@media (max-width: 768px) {
+    .teacher-panel {
+        padding: 15px;
+        max-width: 100%;
+    }
+
+    .students-list {
+        max-height: 250px;
+    }
+
+    .student-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .student-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+}

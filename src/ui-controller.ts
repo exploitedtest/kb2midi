@@ -39,6 +39,9 @@ export class UIController {
   
   // Velocity change handlers
   private onVelocityChangeHandlers: ((velocity: number) => void)[] = [];
+
+  // MIDI channel change handlers
+  private onChannelChangeHandlers: ((channel: number) => void)[] = [];
   
   // UI update batching for performance
   private pendingPianoUpdates = new Map<number, boolean>();
@@ -720,6 +723,18 @@ export class UIController {
   onLayoutChange(handler: (layout: string) => void): void {
     this.layoutSelect.addEventListener('change', () => {
       handler(this.layoutSelect.value);
+    });
+  }
+
+  /**
+   * Sets the handler for MIDI channel change events
+   * @param handler - Function called when the MIDI channel dropdown changes
+   */
+  onChannelChange(handler: (channel: number) => void): void {
+    this.midiChannelSelect.addEventListener('change', () => {
+      const channel = parseInt(this.midiChannelSelect.value);
+      this.onChannelChangeHandlers.forEach(h => h(channel));
+      handler(channel);
     });
   }
 
