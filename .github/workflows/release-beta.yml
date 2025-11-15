@@ -1,0 +1,230 @@
+name: Beta Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: release-beta
+  cancel-in-progress: false
+
+jobs:
+  create-beta-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Get version and create beta tag
+        id: version
+        run: |
+          BASE_VERSION=$(node -p "require('./package.json').version")
+          BETA_COUNT=$(git tag -l "v${BASE_VERSION}-beta.*" | wc -l)
+          BETA_NUM=$((BETA_COUNT + 1))
+          BETA_VERSION="${BASE_VERSION}-beta.${BETA_NUM}"
+          BETA_TAG="v${BETA_VERSION}"
+
+          echo "version=${BETA_VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${BETA_TAG}" >> $GITHUB_OUTPUT
+          echo "Beta version: ${BETA_VERSION}"
+          echo "Beta tag: ${BETA_TAG}"
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          release_name: Beta Release ${{ steps.version.outputs.tag }}
+          body: |
+            ## Beta Release ${{ steps.version.outputs.version }}
+
+            This is an automated beta release from the main branch.
+
+            **⚠️ Beta Software**: This release may contain bugs and is intended for testing purposes.
+
+            ### Installation
+
+            Download the appropriate file for your platform:
+            - **macOS (Apple Silicon)**: `kb2midi-${{ steps.version.outputs.version }}-arm64.dmg`
+            - **macOS (Intel)**: `kb2midi-${{ steps.version.outputs.version }}-x64.dmg`
+            - **macOS (Universal)**: `kb2midi-${{ steps.version.outputs.version }}-universal.dmg`
+            - **Windows**: `kb2midi-Setup-${{ steps.version.outputs.version }}.exe`
+            - **Linux**: `kb2midi-${{ steps.version.outputs.version }}.AppImage`
+
+            ### Changes
+
+            See commit history for details: https://github.com/${{ github.repository }}/commits/main
+          draft: false
+          prerelease: true
+
+  build-macos:
+    needs: create-beta-release
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        arch: [universal, arm64, x64]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update version in package.json
+        run: |
+          npm version ${{ needs.create-beta-release.outputs.version }} --no-git-tag-version
+
+      - name: Build macOS ${{ matrix.arch }}
+        run: |
+          if [ "${{ matrix.arch }}" = "universal" ]; then
+            npm run electron-pack-mac-universal
+          elif [ "${{ matrix.arch }}" = "arm64" ]; then
+            npm run electron-pack-mac-arm64
+          else
+            npx electron-builder --mac dmg --x64 --publish=never
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS ${{ matrix.arch }} artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: release/*.dmg
+          retention-days: 30
+
+      - name: Upload to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-beta-release.outputs.upload_url }}
+          asset_path: release/kb2midi-${{ needs.create-beta-release.outputs.version }}-${{ matrix.arch }}.dmg
+          asset_name: kb2midi-${{ needs.create-beta-release.outputs.version }}-${{ matrix.arch }}.dmg
+          asset_content_type: application/octet-stream
+
+  build-windows:
+    needs: create-beta-release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update version in package.json
+        run: |
+          npm version ${{ needs.create-beta-release.outputs.version }} --no-git-tag-version
+
+      - name: Build Windows
+        run: npm run electron-pack-win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: release/*.exe
+          retention-days: 30
+
+      - name: Find installer file
+        id: find_installer
+        shell: bash
+        run: |
+          INSTALLER=$(find release -name "*.exe" -type f | head -n 1)
+          echo "installer=${INSTALLER}" >> $GITHUB_OUTPUT
+          echo "Found installer: ${INSTALLER}"
+
+      - name: Upload to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-beta-release.outputs.upload_url }}
+          asset_path: ${{ steps.find_installer.outputs.installer }}
+          asset_name: kb2midi-Setup-${{ needs.create-beta-release.outputs.version }}.exe
+          asset_content_type: application/octet-stream
+
+  build-linux:
+    needs: create-beta-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update version in package.json
+        run: |
+          npm version ${{ needs.create-beta-release.outputs.version }} --no-git-tag-version
+
+      - name: Build Linux
+        run: npm run electron-pack-linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: release/*.AppImage
+          retention-days: 30
+
+      - name: Find AppImage file
+        id: find_appimage
+        run: |
+          APPIMAGE=$(find release -name "*.AppImage" -type f | head -n 1)
+          echo "appimage=${APPIMAGE}" >> $GITHUB_OUTPUT
+          echo "Found AppImage: ${APPIMAGE}"
+
+      - name: Upload to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-beta-release.outputs.upload_url }}
+          asset_path: ${{ steps.find_appimage.outputs.appimage }}
+          asset_name: kb2midi-${{ needs.create-beta-release.outputs.version }}.AppImage
+          asset_content_type: application/octet-stream

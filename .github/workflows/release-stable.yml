@@ -1,0 +1,287 @@
+name: Stable Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 2.1.0 or patch/minor/major for auto-bump)'
+        required: true
+        default: 'patch'
+      release_notes:
+        description: 'Release notes (optional - will use generated changelog if empty)'
+        required: false
+        default: ''
+
+concurrency:
+  group: release-stable
+  cancel-in-progress: false
+
+jobs:
+  create-stable-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine version
+        id: version
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+
+          # Check if input is a semver bump keyword
+          if [[ "$INPUT_VERSION" =~ ^(patch|minor|major)$ ]]; then
+            echo "Bumping $INPUT_VERSION version..."
+            npm version $INPUT_VERSION --no-git-tag-version
+            NEW_VERSION=$(node -p "require('./package.json').version")
+          else
+            # Use the provided version directly
+            NEW_VERSION="${INPUT_VERSION}"
+            npm version $NEW_VERSION --no-git-tag-version
+          fi
+
+          VERSION_TAG="v${NEW_VERSION}"
+
+          echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${VERSION_TAG}" >> $GITHUB_OUTPUT
+          echo "Release version: ${NEW_VERSION}"
+          echo "Release tag: ${VERSION_TAG}"
+
+      - name: Commit version bump
+        run: |
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
+          git tag ${{ steps.version.outputs.tag }}
+
+      - name: Push changes
+        run: |
+          git push origin main
+          git push origin ${{ steps.version.outputs.tag }}
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous tag found, generating full history"
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            echo "Generating changelog since ${LAST_TAG}"
+            CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Save to file for multiline output
+          echo "$CHANGELOG" > /tmp/changelog.txt
+          echo "changelog_file=/tmp/changelog.txt" >> $GITHUB_OUTPUT
+
+      - name: Create release body
+        id: release_body
+        run: |
+          CUSTOM_NOTES="${{ github.event.inputs.release_notes }}"
+
+          if [ -n "$CUSTOM_NOTES" ]; then
+            BODY="$CUSTOM_NOTES"
+          else
+            BODY=$(cat <<EOF
+          ## Release ${{ steps.version.outputs.version }}
+
+          ### Installation
+
+          Download the appropriate file for your platform:
+          - **macOS (Apple Silicon)**: \`kb2midi-${{ steps.version.outputs.version }}-arm64.dmg\`
+          - **macOS (Intel)**: \`kb2midi-${{ steps.version.outputs.version }}-x64.dmg\`
+          - **macOS (Universal)**: \`kb2midi-${{ steps.version.outputs.version }}-universal.dmg\`
+          - **Windows**: \`kb2midi-Setup-${{ steps.version.outputs.version }}.exe\`
+          - **Linux**: \`kb2midi-${{ steps.version.outputs.version }}.AppImage\`
+
+          ### What's Changed
+
+          $(cat /tmp/changelog.txt)
+
+          **Full Changelog**: https://github.com/\${{ github.repository }}/compare/v${{ steps.version.outputs.version }}...HEAD
+          EOF
+          )
+          fi
+
+          # Save to file
+          echo "$BODY" > /tmp/release_body.txt
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          release_name: Release ${{ steps.version.outputs.tag }}
+          body_path: /tmp/release_body.txt
+          draft: false
+          prerelease: false
+
+  build-macos:
+    needs: create-stable-release
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        arch: [universal, arm64, x64]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-stable-release.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS ${{ matrix.arch }}
+        run: |
+          if [ "${{ matrix.arch }}" = "universal" ]; then
+            npm run electron-pack-mac-universal
+          elif [ "${{ matrix.arch }}" = "arm64" ]; then
+            npm run electron-pack-mac-arm64
+          else
+            npx electron-builder --mac dmg --x64 --publish=never
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS ${{ matrix.arch }} artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: release/*.dmg
+          retention-days: 90
+
+      - name: Upload to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-stable-release.outputs.upload_url }}
+          asset_path: release/kb2midi-${{ needs.create-stable-release.outputs.version }}-${{ matrix.arch }}.dmg
+          asset_name: kb2midi-${{ needs.create-stable-release.outputs.version }}-${{ matrix.arch }}.dmg
+          asset_content_type: application/octet-stream
+
+  build-windows:
+    needs: create-stable-release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-stable-release.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows
+        run: npm run electron-pack-win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: release/*.exe
+          retention-days: 90
+
+      - name: Find installer file
+        id: find_installer
+        shell: bash
+        run: |
+          INSTALLER=$(find release -name "*.exe" -type f | head -n 1)
+          echo "installer=${INSTALLER}" >> $GITHUB_OUTPUT
+          echo "Found installer: ${INSTALLER}"
+
+      - name: Upload to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-stable-release.outputs.upload_url }}
+          asset_path: ${{ steps.find_installer.outputs.installer }}
+          asset_name: kb2midi-Setup-${{ needs.create-stable-release.outputs.version }}.exe
+          asset_content_type: application/octet-stream
+
+  build-linux:
+    needs: create-stable-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-stable-release.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Linux
+        run: npm run electron-pack-linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: release/*.AppImage
+          retention-days: 90
+
+      - name: Find AppImage file
+        id: find_appimage
+        run: |
+          APPIMAGE=$(find release -name "*.AppImage" -type f | head -n 1)
+          echo "appimage=${APPIMAGE}" >> $GITHUB_OUTPUT
+          echo "Found AppImage: ${APPIMAGE}"
+
+      - name: Upload to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-stable-release.outputs.upload_url }}
+          asset_path: ${{ steps.find_appimage.outputs.appimage }}
+          asset_name: kb2midi-${{ needs.create-stable-release.outputs.version }}.AppImage
+          asset_content_type: application/octet-stream
