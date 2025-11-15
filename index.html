@@ -106,10 +106,20 @@
                 <input type="range" id="arp-gate" min="0" max="100" value="50">
                 <span id="arp-gate-value">50%</span>
             </div>
-            <div class="control-group" style="display: none;"> <!-- Swing is not implemented yet -->
-                <label>Swing</label>
-                <input type="range" id="arp-swing" min="0" max="100" value="0">
-                <span id="arp-swing-value">0%</span>
+            <div class="control-group">
+                <label for="arp-timing-type">Timing Feel</label>
+                <select id="arp-timing-type">
+                    <option value="straight">Straight</option>
+                    <option value="swing">Swing</option>
+                    <option value="shuffle">Shuffle (Triplet)</option>
+                    <option value="dotted">Dotted</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="arp-humanize">
+                    Humanize
+                </label>
             </div>
         </div>
     </div>
