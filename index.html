@@ -12,13 +12,47 @@
         <div class="status" id="status">Ready to play!</div>
     </div>
 
-    <div class="controls">
+    <!-- Mobile-optimized compact header controls -->
+    <div class="mobile-controls mobile-only">
+        <div class="compact-controls">
+            <div class="control-inline">
+                <label for="velocity-mobile">Vel</label>
+                <input type="range" id="velocity-mobile" min="1" max="127" value="80">
+                <span id="velocity-value-mobile">80</span>
+            </div>
+            <div class="control-inline">
+                <label for="midi-channel-mobile">Ch</label>
+                <select id="midi-channel-mobile">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                    <option value="11">11</option>
+                    <option value="12">12</option>
+                    <option value="13">13</option>
+                    <option value="14">14</option>
+                    <option value="15">15</option>
+                    <option value="16">16</option>
+                </select>
+            </div>
+            <button id="mobile-menu-toggle" class="icon-button">⚙️</button>
+        </div>
+    </div>
+
+    <!-- Desktop full controls -->
+    <div class="controls desktop-tablet-only">
         <div class="control-group">
             <label for="velocity">Velocity</label>
             <input type="range" id="velocity" min="1" max="127" value="80">
             <span id="velocity-value">80</span>
         </div>
-        
+
         <div class="control-group">
             <label for="midi-channel">MIDI Channel</label>
             <select id="midi-channel">
@@ -40,30 +74,30 @@
                 <option value="16">16</option>
             </select>
         </div>
-        
-        <div class="control-group">
+
+        <div class="control-group mobile-hide">
             <label for="midi-clock-input">Clock Input</label>
             <select id="midi-clock-input">
                 <option value="auto">Auto (Best)</option>
             </select>
         </div>
 
-        <div class="control-group">
+        <div class="control-group mobile-hide">
             <label>Wheels</label>
             <div style="display:flex; gap:8px; justify-content:center;">
                 <div id="mod-indicator" class="wheel-indicator" title="Hold ArrowUp">Mod</div>
                 <div id="pitch-indicator" class="wheel-indicator" title="Hold ArrowDown">Pitch</div>
             </div>
         </div>
-        
-        <div class="control-group">
+
+        <div class="control-group mobile-hide">
             <label>Octave</label>
             <div style="display:flex; gap:8px; justify-content:center;">
                 <div id="octave-down-indicator" class="wheel-indicator" title="Hold ArrowLeft">↓ Oct</div>
                 <div id="octave-up-indicator" class="wheel-indicator" title="Hold ArrowRight">↑ Oct</div>
             </div>
         </div>
-        
+
         <div class="control-group">
             <label>Keyboard Layout</label>
             <select id="layout-select">
@@ -71,7 +105,7 @@
                 <option value="simple">Simple</option>
             </select>
         </div>
-        
+
         <div class="control-group">
             <label>Actions</label>
             <button id="panic-button">Stop All Notes</button>
@@ -118,20 +152,72 @@
         <div class="piano" id="piano"></div>
     </div>
 
-    <div class="keyboard-mapping" id="keyboard-mapping">
+    <div class="keyboard-mapping desktop-tablet-only" id="keyboard-mapping">
         <!-- Content dynamically generated -->
     </div>
-    
+
     <div class="octave-display">
         Octave: <span id="current-octave">4</span>
     </div>
-    
-    <div id="clock-status" class="clock-status">
+
+    <div id="clock-status" class="clock-status mobile-hide">
         🔴 No Clock Sync
         <div id="beat-indicator" class="beat-indicator"></div>
     </div>
 
-    <div class="instructions">
+    <!-- Mobile settings panel (collapsible) -->
+    <div class="mobile-settings-panel mobile-only" id="mobile-settings-panel" style="display: none;">
+        <div class="settings-content">
+            <div class="control-group">
+                <label for="midi-clock-input-mobile">Clock Input</label>
+                <select id="midi-clock-input-mobile">
+                    <option value="auto">Auto (Best)</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="layout-select-mobile">Keyboard Layout</label>
+                <select id="layout-select-mobile">
+                    <option value="expanded">Expanded</option>
+                    <option value="simple">Simple</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <button id="panic-button-mobile">Stop All Notes</button>
+                <button id="arpeggiator-toggle-mobile">Enable Arpeggiator</button>
+            </div>
+            <div class="arpeggiator-controls" id="arpeggiator-controls-mobile" style="display: none;">
+                <div class="control-group">
+                    <label>Pattern</label>
+                    <select id="arp-pattern-mobile">
+                        <option value="up">Up</option>
+                        <option value="down">Down</option>
+                        <option value="up-down">Up-Down</option>
+                        <option value="down-up">Down-Up</option>
+                        <option value="random">Random</option>
+                        <option value="chord">Chord</option>
+                        <option value="stacked-chord">Stacked Chord</option>
+                        <option value="timeline">Timeline</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Division</label>
+                    <select id="arp-division-mobile">
+                        <option value="1">1</option>
+                        <option value="2">1/2</option>
+                        <option value="4" selected>1/4</option>
+                        <option value="8">1/8</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Gate</label>
+                    <input type="range" id="arp-gate-mobile" min="0" max="100" value="50">
+                    <span id="arp-gate-value-mobile">50%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="instructions desktop-only">
         <h3>Setup Instructions</h3>
         <p><strong>⚠️ Important:</strong> The Web MIDI API in browsers can't create new MIDI devices that other software can see. We need to create a virtual MIDI port first.</p>
         

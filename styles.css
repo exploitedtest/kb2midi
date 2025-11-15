@@ -464,94 +464,332 @@ input:focus, select:focus {
     gap: 10px;
 }
 
+/* Responsive Display Classes */
+.mobile-only {
+    display: none;
+}
+
+.desktop-only {
+    display: block;
+}
+
+.desktop-tablet-only {
+    display: block;
+}
+
+.mobile-hide {
+    display: block;
+}
+
+/* Mobile-optimized compact controls */
+.mobile-controls {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.compact-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255,255,255,0.1);
+    padding: 10px 15px;
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.control-inline {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex: 1;
+}
+
+.control-inline label {
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 30px;
+}
+
+.control-inline input[type="range"] {
+    flex: 1;
+    max-width: 100px;
+}
+
+.control-inline select {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-size: 14px;
+    max-width: 60px;
+}
+
+.control-inline span {
+    font-size: 12px;
+    min-width: 30px;
+    text-align: right;
+}
+
+.icon-button {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s ease;
+}
+
+.icon-button:active {
+    background: rgba(76, 175, 80, 0.4);
+    transform: scale(0.95);
+}
+
+/* Mobile settings panel */
+.mobile-settings-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(30, 30, 50, 0.98);
+    backdrop-filter: blur(20px);
+    border-radius: 20px 20px 0 0;
+    border: 1px solid rgba(255,255,255,0.2);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+    z-index: 1000;
+    max-height: 70vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+.settings-content {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Touch-optimized piano keys */
+@media (hover: none) and (pointer: coarse) {
+    .key {
+        /* Larger tap targets for touch */
+        min-height: 60px;
+    }
+
+    .white-key {
+        min-width: 40px;
+    }
+
+    .black-key {
+        min-width: 26px;
+    }
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
+    .mobile-only {
+        display: block;
+    }
+
+    .desktop-tablet-only {
+        display: none;
+    }
+
+    .mobile-hide {
+        display: none !important;
+    }
+
+    .desktop-only {
+        display: none;
+    }
+
     body {
-        padding: 10px;
+        padding: 5px;
     }
-    
+
+    .header {
+        margin-bottom: 15px;
+    }
+
     .header h1 {
-        font-size: 2em;
+        font-size: 1.8em;
+        margin-bottom: 8px;
     }
-    
+
+    .status {
+        font-size: 14px;
+        padding: 8px 16px;
+    }
+
     .controls {
         flex-direction: column;
         gap: 10px;
         align-items: center;
     }
-    
+
     .control-group {
         width: 100%;
         max-width: 300px;
     }
-    
+
     .piano-container {
         padding: 10px;
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin-bottom: 15px;
     }
-    
+
     .piano {
         min-width: 400px;
+        touch-action: none;
     }
-    
+
     .white-key {
         width: 35px;
     }
-    
+
     .black-key {
         width: 22px;
     }
-    
+
     .arpeggiator-controls {
         flex-direction: column;
         gap: 10px;
     }
-    
+
     .keyboard-mapping {
         padding: 15px;
         max-width: 100%;
         transform: scale(0.9);
         transform-origin: center top;
     }
-    
+
     .instructions {
         max-width: 100%;
         padding: 15px;
         text-align: left;
     }
+
+    .octave-display {
+        font-size: 1.1em;
+        margin-bottom: 8px;
+    }
+}
+
+/* Tablet-specific styles */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .mobile-only {
+        display: none;
+    }
+
+    .desktop-tablet-only {
+        display: block;
+    }
+
+    .desktop-only {
+        display: none;
+    }
 }
 
 @media (max-width: 480px) {
     .header h1 {
-        font-size: 1.8em;
+        font-size: 1.5em;
     }
-    
+
+    .status {
+        font-size: 12px;
+        padding: 6px 12px;
+    }
+
     .white-key {
         width: 30px;
         height: 100px;
     }
-    
+
     .black-key {
         width: 20px;
         height: 70px;
     }
-    
+
     .piano {
         height: 100px;
     }
-    
+
     .piano-row {
         height: 100px;
     }
-    
+
     .keyboard-mapping {
         transform: scale(0.75);
         transform-origin: center top;
     }
-    
+
     .kb-key {
         min-width: 30px;
         padding: 6px 8px;
         font-size: 10px;
+    }
+
+    .compact-controls {
+        padding: 8px 12px;
+        gap: 8px;
+    }
+
+    .control-inline {
+        gap: 6px;
+    }
+
+    .control-inline label {
+        font-size: 11px;
+        min-width: 25px;
+    }
+
+    .control-inline input[type="range"] {
+        max-width: 80px;
+    }
+
+    .control-inline select {
+        max-width: 50px;
+        font-size: 12px;
+    }
+}
+
+/* Landscape mobile orientation */
+@media (max-width: 768px) and (orientation: landscape) {
+    .header h1 {
+        font-size: 1.5em;
+        margin-bottom: 5px;
+    }
+
+    .status {
+        padding: 6px 12px;
+        margin-bottom: 10px;
+    }
+
+    .mobile-controls {
+        margin-bottom: 10px;
+    }
+
+    .piano-container {
+        padding: 8px;
+        margin-bottom: 10px;
+    }
+
+    .octave-display {
+        font-size: 1em;
+        margin-bottom: 5px;
     }
 }

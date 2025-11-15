@@ -1,4 +1,5 @@
 import { KeyboardLayout, getMIDINoteName } from './types';
+import { ResponsiveUI, ViewportInfo } from './responsive-ui';
 
 // Unified control configuration interface
 interface UIControl {
@@ -30,20 +31,25 @@ export class UIController {
   private pitchIndicator: HTMLElement | null = null;
   private octaveDownIndicator: HTMLElement | null = null;
   private octaveUpIndicator: HTMLElement | null = null;
-  
+
   private activeKeys = new Map<number, HTMLElement>();
   private keyElements = new Map<string, HTMLElement>();
-  
+
   // Unified control registry
   private controls = new Map<string, UIControl>();
-  
+
   // Velocity change handlers
   private onVelocityChangeHandlers: ((velocity: number) => void)[] = [];
-  
+
   // UI update batching for performance
   private pendingPianoUpdates = new Map<number, boolean>();
   private pendingKeyVisualUpdates = new Map<string, boolean>();
   private updateScheduled = false;
+
+  // Responsive UI
+  private responsiveUI: ResponsiveUI;
+  private mobileSettingsPanel: HTMLElement | null = null;
+  private mobileMenuToggle: HTMLElement | null = null;
 
   constructor() {
     this.pianoContainer = document.getElementById('piano')!;
@@ -59,10 +65,19 @@ export class UIController {
     this.pitchIndicator = document.getElementById('pitch-indicator');
     this.octaveDownIndicator = document.getElementById('octave-down-indicator');
     this.octaveUpIndicator = document.getElementById('octave-up-indicator');
+    this.mobileSettingsPanel = document.getElementById('mobile-settings-panel');
+    this.mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+
+    // Initialize responsive UI
+    this.responsiveUI = new ResponsiveUI();
+    this.setupResponsiveUI();
+
     this.createClockStatusElement();
     this.setupUIEventListeners();
     this.setupButtonPressEffects();
     this.initializeControls();
+    this.setupMobileControls();
+    this.setupTouchGestures();
   }
 
   /**
@@ -419,12 +434,36 @@ export class UIController {
     }
     
     key.appendChild(label);
-    
-    // Add event listeners
+
+    // Add mouse event listeners
     key.addEventListener('mousedown', () => this.handlePianoClick(note, true));
     key.addEventListener('mouseup', () => this.handlePianoClick(note, false));
     key.addEventListener('mouseleave', () => this.handlePianoClick(note, false));
-    
+
+    // Add touch event listeners for mobile support
+    let touchActive = false;
+    key.addEventListener('touchstart', (e) => {
+      e.preventDefault(); // Prevent mouse events from firing
+      touchActive = true;
+      this.handlePianoClick(note, true);
+    }, { passive: false });
+
+    key.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      if (touchActive) {
+        touchActive = false;
+        this.handlePianoClick(note, false);
+      }
+    }, { passive: false });
+
+    key.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      if (touchActive) {
+        touchActive = false;
+        this.handlePianoClick(note, false);
+      }
+    }, { passive: false });
+
     return key;
   }
 
@@ -937,5 +976,204 @@ export class UIController {
       this.flushUpdates();
       this.updateScheduled = false;
     }
+  }
+
+  /**
+   * Sets up responsive UI behavior
+   */
+  private setupResponsiveUI(): void {
+    // Listen for viewport changes
+    this.responsiveUI.onViewportChange((info: ViewportInfo) => {
+      this.handleViewportChange(info);
+    });
+
+    // Listen for orientation changes
+    this.responsiveUI.onOrientationChange((orientation) => {
+      console.log(`Orientation changed to: ${orientation}`);
+    });
+  }
+
+  /**
+   * Handles viewport changes
+   */
+  private handleViewportChange(info: ViewportInfo): void {
+    console.log(`Viewport changed:`, info);
+
+    // Adjust piano size for mobile
+    if (info.deviceType === 'mobile') {
+      // Mobile-specific adjustments can be handled via CSS
+      // but we can add dynamic adjustments here if needed
+    }
+  }
+
+  /**
+   * Sets up mobile control synchronization
+   */
+  private setupMobileControls(): void {
+    // Mobile menu toggle
+    if (this.mobileMenuToggle) {
+      this.mobileMenuToggle.addEventListener('click', () => {
+        this.toggleMobileSettings();
+      });
+    }
+
+    // Sync mobile and desktop velocity controls
+    const velocityMobile = document.getElementById('velocity-mobile') as HTMLInputElement;
+    const velocityValueMobile = document.getElementById('velocity-value-mobile');
+
+    if (velocityMobile && velocityValueMobile) {
+      // Mobile -> Desktop sync
+      velocityMobile.addEventListener('input', () => {
+        const value = velocityMobile.value;
+        this.velocitySlider.value = value;
+        velocityValueMobile.textContent = value;
+        const velocityValue = document.getElementById('velocity-value');
+        if (velocityValue) velocityValue.textContent = value;
+
+        // Notify velocity change handlers
+        const numValue = parseInt(value);
+        this.onVelocityChangeHandlers.forEach(handler => handler(numValue));
+      });
+
+      // Desktop -> Mobile sync
+      this.velocitySlider.addEventListener('input', () => {
+        velocityMobile.value = this.velocitySlider.value;
+        velocityValueMobile.textContent = this.velocitySlider.value;
+      });
+    }
+
+    // Sync mobile and desktop MIDI channel controls
+    const midiChannelMobile = document.getElementById('midi-channel-mobile') as HTMLSelectElement;
+
+    if (midiChannelMobile) {
+      // Mobile -> Desktop sync
+      midiChannelMobile.addEventListener('change', () => {
+        this.midiChannelSelect.value = midiChannelMobile.value;
+      });
+
+      // Desktop -> Mobile sync
+      this.midiChannelSelect.addEventListener('change', () => {
+        midiChannelMobile.value = this.midiChannelSelect.value;
+      });
+    }
+
+    // Sync layout selects
+    const layoutSelectMobile = document.getElementById('layout-select-mobile') as HTMLSelectElement;
+
+    if (layoutSelectMobile) {
+      // Mobile -> Desktop sync
+      layoutSelectMobile.addEventListener('change', () => {
+        this.layoutSelect.value = layoutSelectMobile.value;
+        // Trigger change event on desktop select
+        this.layoutSelect.dispatchEvent(new Event('change'));
+      });
+
+      // Desktop -> Mobile sync
+      this.layoutSelect.addEventListener('change', () => {
+        layoutSelectMobile.value = this.layoutSelect.value;
+      });
+    }
+
+    // Sync panic buttons
+    const panicButtonMobile = document.getElementById('panic-button-mobile');
+    const panicButton = document.getElementById('panic-button');
+
+    if (panicButtonMobile && panicButton) {
+      panicButtonMobile.addEventListener('click', () => {
+        panicButton.click();
+      });
+    }
+
+    // Sync arpeggiator toggle buttons
+    const arpToggleMobile = document.getElementById('arpeggiator-toggle-mobile');
+    const arpToggle = document.getElementById('arpeggiator-toggle');
+    const arpControlsMobile = document.getElementById('arpeggiator-controls-mobile');
+
+    if (arpToggleMobile && arpToggle) {
+      arpToggleMobile.addEventListener('click', () => {
+        arpToggle.click();
+        // Show/hide mobile arp controls
+        if (arpControlsMobile) {
+          arpControlsMobile.style.display =
+            arpControlsMobile.style.display === 'none' ? 'flex' : 'none';
+        }
+      });
+    }
+  }
+
+  /**
+   * Toggles the mobile settings panel
+   */
+  private toggleMobileSettings(): void {
+    if (!this.mobileSettingsPanel) return;
+
+    if (this.mobileSettingsPanel.style.display === 'none') {
+      this.mobileSettingsPanel.style.display = 'block';
+    } else {
+      this.mobileSettingsPanel.style.display = 'none';
+    }
+  }
+
+  /**
+   * Sets up touch gestures for mobile interactions
+   */
+  private setupTouchGestures(): void {
+    // Add swipe gestures to piano container for octave changes
+    this.responsiveUI.enableGestures(this.pianoContainer, {
+      onSwipe: (e) => {
+        if (e.direction === 'left') {
+          // Swipe left = octave up
+          const octaveUpIndicator = this.octaveUpIndicator;
+          if (octaveUpIndicator) {
+            octaveUpIndicator.classList.add('active');
+            setTimeout(() => octaveUpIndicator.classList.remove('active'), 200);
+          }
+          // Trigger octave up event (will be handled by main controller)
+          document.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }));
+          setTimeout(() => {
+            document.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowRight' }));
+          }, 100);
+        } else if (e.direction === 'right') {
+          // Swipe right = octave down
+          const octaveDownIndicator = this.octaveDownIndicator;
+          if (octaveDownIndicator) {
+            octaveDownIndicator.classList.add('active');
+            setTimeout(() => octaveDownIndicator.classList.remove('active'), 200);
+          }
+          // Trigger octave down event
+          document.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }));
+          setTimeout(() => {
+            document.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowLeft' }));
+          }, 100);
+        }
+      }
+    });
+
+    // Add touch event listeners to piano keys for better mobile response
+    // (The createPianoKey method already has touch support via mousedown/up,
+    // but we can enhance it with haptic feedback if needed)
+
+    // Add haptic feedback on touch (if supported)
+    if ('vibrate' in navigator) {
+      this.pianoContainer.addEventListener('touchstart', (e) => {
+        if ((e.target as HTMLElement).classList.contains('key')) {
+          navigator.vibrate(10); // Short haptic feedback
+        }
+      }, { passive: true });
+    }
+  }
+
+  /**
+   * Gets responsive UI instance for external use
+   */
+  getResponsiveUI(): ResponsiveUI {
+    return this.responsiveUI;
+  }
+
+  /**
+   * Cleanup responsive UI
+   */
+  cleanup(): void {
+    this.responsiveUI.cleanup();
   }
 }
