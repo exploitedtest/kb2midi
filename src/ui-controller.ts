@@ -974,4 +974,138 @@ export class UIController {
       this.updateScheduled = false;
     }
   }
+
+  /**
+   * Populates the chord progression dropdown with available progressions
+   */
+  populateChordProgressions(progressions: { name: string; description: string }[]): void {
+    const select = document.getElementById('chord-progression-select') as HTMLSelectElement;
+    if (!select) return;
+
+    select.innerHTML = '';
+    progressions.forEach(prog => {
+      const option = document.createElement('option');
+      option.value = prog.name;
+      option.textContent = `${prog.name} - ${prog.description}`;
+      select.appendChild(option);
+    });
+  }
+
+  /**
+   * Listen for chord progression toggle button clicks
+   */
+  onChordProgressionToggle(handler: () => void): void {
+    const toggleButton = document.getElementById('chord-progression-toggle');
+    if (!toggleButton) return;
+    toggleButton.addEventListener('click', () => {
+      handler();
+    });
+  }
+
+  /**
+   * Listen for chord progression selection changes
+   */
+  onChordProgressionChange(handler: (progression: string) => void): void {
+    const select = document.getElementById('chord-progression-select') as HTMLSelectElement;
+    if (!select) return;
+    select.addEventListener('change', () => {
+      handler(select.value);
+    });
+  }
+
+  /**
+   * Listen for chord key selection changes
+   */
+  onChordKeyChange(handler: (key: string) => void): void {
+    const select = document.getElementById('chord-key-select') as HTMLSelectElement;
+    if (!select) return;
+    select.addEventListener('change', () => {
+      handler(select.value);
+    });
+  }
+
+  /**
+   * Listen for chord beats/chord changes
+   */
+  onChordBeatsChange(handler: (beats: number) => void): void {
+    const select = document.getElementById('chord-beats-select') as HTMLSelectElement;
+    if (!select) return;
+    select.addEventListener('change', () => {
+      handler(parseInt(select.value));
+    });
+  }
+
+  /**
+   * Listen for chord fade-in beats changes
+   */
+  onChordFadeBeatsChange(handler: (beats: number) => void): void {
+    const select = document.getElementById('chord-fade-beats-select') as HTMLSelectElement;
+    if (!select) return;
+    select.addEventListener('change', () => {
+      handler(parseFloat(select.value));
+    });
+  }
+
+  /**
+   * Updates the chord progression toggle button text
+   */
+  updateChordProgressionButtonText(enabled: boolean): void {
+    const button = document.getElementById('chord-progression-toggle');
+    if (button) {
+      button.textContent = enabled ? 'Disable Chord Progression' : 'Enable Chord Progression';
+    }
+  }
+
+  /**
+   * Shows or hides the chord progression controls panel
+   */
+  showChordProgressionControls(show: boolean): void {
+    const controls = document.getElementById('chord-progression-controls');
+    if (controls) {
+      controls.style.display = show ? 'flex' : 'none';
+    }
+  }
+
+  /**
+   * Updates the current chord display
+   */
+  updateCurrentChordDisplay(chordName: string): void {
+    const display = document.getElementById('current-chord-display');
+    if (display) {
+      display.textContent = chordName;
+    }
+  }
+
+  /**
+   * Highlights notes on the piano based on chord progression
+   * @param highlights - Array of note highlights with opacity and upcoming status
+   */
+  highlightChordNotes(highlights: { note: number; opacity: number; isUpcoming: boolean }[]): void {
+    // First, remove all existing chord highlights
+    this.activeKeys.forEach((keyElement) => {
+      keyElement.classList.remove('chord-highlight', 'chord-upcoming');
+      keyElement.style.removeProperty('--chord-opacity');
+    });
+
+    // Apply new highlights to all octaves
+    highlights.forEach(({ note, opacity, isUpcoming }) => {
+      // Highlight this note in all visible octaves
+      this.activeKeys.forEach((keyElement, midiNote) => {
+        if (midiNote % 12 === note) {
+          keyElement.classList.add(isUpcoming ? 'chord-upcoming' : 'chord-highlight');
+          keyElement.style.setProperty('--chord-opacity', opacity.toString());
+        }
+      });
+    });
+  }
+
+  /**
+   * Clears all chord progression highlights
+   */
+  clearChordHighlights(): void {
+    this.activeKeys.forEach((keyElement) => {
+      keyElement.classList.remove('chord-highlight', 'chord-upcoming');
+      keyElement.style.removeProperty('--chord-opacity');
+    });
+  }
 }

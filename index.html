@@ -93,6 +93,7 @@
             <label>Actions</label>
             <button id="panic-button">Stop All Notes</button>
             <button id="arpeggiator-toggle">Enable Arpeggiator</button>
+            <button id="chord-progression-toggle">Enable Chord Progression</button>
         </div>
         
         <div class="arpeggiator-controls" id="arpeggiator-controls" style="display: none;">
@@ -127,6 +128,55 @@
                 <label>Swing</label>
                 <input type="range" id="arp-swing" min="0" max="100" value="0">
                 <span id="arp-swing-value">0%</span>
+            </div>
+        </div>
+
+        <div class="chord-progression-controls" id="chord-progression-controls" style="display: none;">
+            <div class="control-group">
+                <label>Progression</label>
+                <select id="chord-progression-select">
+                    <!-- Options populated dynamically -->
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Key</label>
+                <select id="chord-key-select">
+                    <option value="C" selected>C</option>
+                    <option value="C#">C#/Db</option>
+                    <option value="D">D</option>
+                    <option value="Eb">Eb</option>
+                    <option value="E">E</option>
+                    <option value="F">F</option>
+                    <option value="F#">F#/Gb</option>
+                    <option value="G">G</option>
+                    <option value="Ab">Ab</option>
+                    <option value="A">A</option>
+                    <option value="Bb">Bb</option>
+                    <option value="B">B</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Beats/Chord</label>
+                <select id="chord-beats-select">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="4" selected>4</option>
+                    <option value="8">8</option>
+                    <option value="16">16</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Fade-in (beats)</label>
+                <select id="chord-fade-beats-select">
+                    <option value="0">Off</option>
+                    <option value="0.5">0.5</option>
+                    <option value="1" selected>1</option>
+                    <option value="2">2</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Current Chord</label>
+                <div id="current-chord-display" style="font-weight: bold; font-size: 1.2em; color: #4a9eff;">-</div>
             </div>
         </div>
     </div>

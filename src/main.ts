@@ -3,6 +3,7 @@ import { KeyboardInput } from './keyboard-input';
 import { UIController } from './ui-controller';
 import { ClockSync } from './clock-sync';
 import { Arpeggiator } from './arpeggiator';
+import { ChordProgressionEngine } from './chord-progression';
 import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL, ClockSource } from './types';
 
 // Enhanced control configuration with better type safety
@@ -25,6 +26,7 @@ class MIDIController {
   private uiController: UIController;
   private clockSync: ClockSync;
   private arpeggiator: Arpeggiator;
+  private chordProgression: ChordProgressionEngine;
   private isActive = false;
   // Tracks whether the app is in its initial async initialization
   private initializing = true;
@@ -52,7 +54,8 @@ class MIDIController {
     this.keyboardInput = new KeyboardInput();
     this.uiController = new UIController();
     this.arpeggiator = new Arpeggiator(this.clockSync);
-    
+    this.chordProgression = new ChordProgressionEngine(this.clockSync);
+
     this.initialize();
   }
 
@@ -94,6 +97,9 @@ class MIDIController {
 
     // Set up arpeggiator
     this.setupArpeggiator();
+
+    // Set up chord progression
+    this.setupChordProgression();
 
     // Set up keyboard input handlers
     this.setupKeyboardHandlers();
@@ -197,6 +203,44 @@ class MIDIController {
           this.uiController.updatePianoKey(note, false);
         }, flashDuration);
       });
+    });
+  }
+
+  /**
+   * Sets up chord progression functionality
+   */
+  private setupChordProgression(): void {
+    // Populate chord progression dropdown
+    const progressions = this.chordProgression.getAvailableProgressions();
+    this.uiController.populateChordProgressions(progressions);
+
+    // Set default progression
+    if (progressions.length > 0) {
+      this.chordProgression.setProgression(progressions[0].name);
+    }
+
+    // Set up chord change callback
+    this.chordProgression.onChordChange((chord) => {
+      // Update UI with current chord name
+      const chordNames = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+      const qualities: { [key: string]: string } = {
+        'major': '',
+        'minor': 'm',
+        'diminished': 'dim',
+        'augmented': 'aug',
+        'major7': 'maj7',
+        'minor7': 'm7',
+        'dominant7': '7',
+        'sus2': 'sus2',
+        'sus4': 'sus4'
+      };
+      const chordName = `${chordNames[chord.root]}${qualities[chord.quality]}`;
+      this.uiController.updateCurrentChordDisplay(chordName);
+    });
+
+    // Set up highlights update callback
+    this.chordProgression.onHighlightsUpdate((highlights) => {
+      this.uiController.highlightChordNotes(highlights);
     });
   }
 
@@ -413,11 +457,37 @@ class MIDIController {
         type: 'range',
         displayId: 'arp-swing-value',
         displayFormatter: (value) => `${value}%`
+      },
+
+      // Chord progression toggle
+      {
+        id: 'chord-progression-toggle',
+        setter: () => {
+          this.toggleChordProgression();
+        },
+        type: 'button'
       }
     ];
 
     // Wire up all controls using unified system
     this.wireControls(controlConfigs);
+
+    // Set up chord progression UI handlers
+    this.uiController.onChordProgressionChange((progression) => {
+      this.chordProgression.setProgression(progression);
+    });
+
+    this.uiController.onChordKeyChange((key) => {
+      this.chordProgression.setKey(key);
+    });
+
+    this.uiController.onChordBeatsChange((beats) => {
+      this.chordProgression.setBeatsPerChord(beats);
+    });
+
+    this.uiController.onChordFadeBeatsChange((beats) => {
+      this.chordProgression.setFadeInBeats(beats);
+    });
   }
 
   /**
@@ -578,14 +648,14 @@ class MIDIController {
   private toggleArpeggiator(): void {
     const enabled = !this.arpeggiator.isEnabled();
     const currentNotes = Array.from(this.state.activeNotes.values());
-    
+
     if (enabled) {
       // Enabling arpeggiator: stop any immediately playing notes, let clock take over
       currentNotes.forEach(activeNote => {
         const ch = activeNote.channel ?? this.uiController.getMidiChannel();
         this.midiEngine.stopNote(activeNote.note, 0, ch);
       });
-      
+
       this.arpeggiator.setEnabled(enabled);
       // Add notes to arpeggiator in the order they're currently held
       // Note: This preserves the order from activeNotes Map iteration
@@ -597,12 +667,33 @@ class MIDIController {
       // Disabling arpeggiator: clear arpeggiator and immediately play all held notes
       this.arpeggiator.setEnabled(enabled);
       this.arpeggiator.clearNotes();
-      
+
       currentNotes.forEach(activeNote => {
         this.midiEngine.playNote(activeNote.note, activeNote.velocity, this.uiController.getMidiChannel());
       });
-      
+
       this.uiController.updateStatus('Arpeggiator Disabled', 'info');
+    }
+  }
+
+  /**
+   * Toggles the chord progression engine on/off
+   */
+  private toggleChordProgression(): void {
+    const enabled = !this.chordProgression.isEnabled();
+
+    if (enabled) {
+      this.chordProgression.enable();
+      this.uiController.updateStatus('Chord Progression Enabled - Clock Driven', 'success');
+      this.uiController.showChordProgressionControls(true);
+      this.uiController.updateChordProgressionButtonText(true);
+    } else {
+      this.chordProgression.disable();
+      this.uiController.clearChordHighlights();
+      this.uiController.updateStatus('Chord Progression Disabled', 'info');
+      this.uiController.showChordProgressionControls(false);
+      this.uiController.updateChordProgressionButtonText(false);
+      this.uiController.updateCurrentChordDisplay('-');
     }
   }
 
