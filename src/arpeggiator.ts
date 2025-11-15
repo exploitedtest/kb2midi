@@ -603,6 +603,10 @@ private playNoteWithGate(note: number, velocity: number, channel: number, gateTi
     }
   }
 
+  // Apply minimum gate time to prevent race conditions
+  // Notes need at least 5ms to sound properly
+  const safeGateTime = Math.max(5, gateTime);
+
   // Start note
   this.midiEngine!.playNote(note, velocity, channel);
 
@@ -617,7 +621,7 @@ private playNoteWithGate(note: number, velocity: number, channel: number, gateTi
     } catch (error) {
       console.error('Error stopping arpeggiator note:', error);
     }
-  }, gateTime);
+  }, safeGateTime);
 
   this.activeTimeouts.add(timeout);
   this.heldNoteTimeouts.set(key, timeout);
