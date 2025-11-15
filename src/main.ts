@@ -3,6 +3,7 @@ import { KeyboardInput } from './keyboard-input';
 import { UIController } from './ui-controller';
 import { ClockSync } from './clock-sync';
 import { Arpeggiator } from './arpeggiator';
+import { ParticleEngine } from './particle-engine';
 import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
 
 // Enhanced control configuration with better type safety
@@ -25,6 +26,7 @@ class MIDIController {
   private uiController: UIController;
   private clockSync: ClockSync;
   private arpeggiator: Arpeggiator;
+  private particleEngine: ParticleEngine | null = null;
   private isActive = false;
   // Tracks whether the app is in its initial async initialization
   private initializing = true;
@@ -52,7 +54,14 @@ class MIDIController {
     this.keyboardInput = new KeyboardInput();
     this.uiController = new UIController();
     this.arpeggiator = new Arpeggiator(this.clockSync);
-    
+
+    // Initialize particle engine
+    try {
+      this.particleEngine = new ParticleEngine('particle-canvas');
+    } catch (error) {
+      console.warn('Could not initialize particle engine:', error);
+    }
+
     this.initialize();
   }
 
@@ -188,7 +197,13 @@ class MIDIController {
     this.arpeggiator.onStep((_step, note) => {
       // Visual feedback for arpeggiator steps using batched updates
       this.uiController.updatePianoKey(note, true);
-      
+
+      // Spawn particles for arpeggiator notes
+      if (this.particleEngine) {
+        const velocity = this.uiController.getVelocity();
+        this.particleEngine.spawnParticles(note, velocity);
+      }
+
       // Use requestAnimationFrame for smoother visual feedback
       // Reduce flash duration for very fast arpeggios to prevent visual pile-up
       const flashDuration = this.calculateArpeggiatorFlashDuration();
@@ -326,7 +341,8 @@ class MIDIController {
     // Piano click handler
     this.uiController.onPianoClick((note, down) => {
       if (down) {
-        this.playNote(note, this.uiController.getVelocity());
+        const velocity = this.uiController.getVelocity();
+        this.playNote(note, velocity);
       } else {
         this.stopNote(note);
       }
@@ -483,13 +499,18 @@ class MIDIController {
     if (this.arpeggiator.isEnabled()) {
       // When arpeggiator is enabled, add note to sequence in press order
       this.arpeggiator.addNote(note);
-      
+
       // Update visual feedback to show key is "held" for arpeggiator
       this.uiController.updatePianoKey(note, true);
     } else {
       // When arpeggiator is disabled, play note immediately (normal behavior)
       this.midiEngine.playNote(note, velocity, channel);
       this.uiController.updatePianoKey(note, true);
+
+      // Spawn particles for this note
+      if (this.particleEngine) {
+        this.particleEngine.spawnParticles(note, velocity);
+      }
     }
   }
 
@@ -722,20 +743,25 @@ class MIDIController {
   cleanup(): void {
     // Stop all active notes
     this.stopAllNotes();
-    
+
     // Clean up MIDI engine
     this.midiEngine.cleanup();
-    
+
     // Clean up keyboard input
     this.keyboardInput.cleanup();
-    
+
     // Clean up arpeggiator
     this.arpeggiator.setEnabled(false);
     this.arpeggiator.clearStepCallbacks();
-    
+
     // Clean up clock sync callbacks
     this.clockSync.clearCallbacks();
-    
+
+    // Clean up particle engine
+    if (this.particleEngine) {
+      this.particleEngine.clear();
+    }
+
     // Clear local state
     this.state.activeNotes.clear();
     this.state.sustainedNotes.clear();
@@ -777,6 +803,11 @@ class MIDIController {
 
       // Reattach keyboard listeners
       this.keyboardInput.attach();
+
+      // Restart particle engine if it was stopped
+      if (this.particleEngine) {
+        this.particleEngine.start();
+      }
 
       // Refresh UI
       this.updateUI();

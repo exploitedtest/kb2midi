@@ -13,6 +13,25 @@ body {
     align-items: center;
     padding: 20px;
     color: white;
+    position: relative;
+}
+
+/* Particle canvas - positioned behind UI elements */
+#particle-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Ensure all content is above the particle canvas */
+.header, .controls, .piano-container, .keyboard-mapping,
+.octave-display, .clock-status, .instructions, #midi-help {
+    position: relative;
+    z-index: 1;
 }
 
 .header {
