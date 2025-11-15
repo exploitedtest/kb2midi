@@ -9,7 +9,8 @@ import {
   ShuffleTiming,
   DottedTiming,
   HumanizeTiming,
-  LayeredTiming
+  LayeredTiming,
+  VelocityHumanize
 } from './arpeggiator';
 import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
 
@@ -416,6 +417,54 @@ class MIDIController {
           this.updateHumanizeState(value === 'true');
         },
         type: 'checkbox'
+      },
+
+      // Velocity humanize toggle
+      {
+        id: 'arp-humanize-velocity',
+        setter: (value) => {
+          this.updateVelocityHumanizeState(value === 'true');
+        },
+        type: 'checkbox'
+      },
+
+      // Accent pattern
+      {
+        id: 'arp-accent',
+        setter: (value) => {
+          this.updateAccentPattern(value as 'none' | 'downbeats' | 'offbeats' | 'every-3rd');
+        },
+        type: 'select'
+      },
+
+      // Gate probability
+      {
+        id: 'arp-probability',
+        setter: (value) => {
+          const numValue = parseInt(value);
+          this.updateGateProbability(numValue / 100);
+        },
+        type: 'range',
+        displayId: 'arp-probability-value',
+        displayFormatter: (value) => `${value}%`
+      },
+
+      // Ratchet count
+      {
+        id: 'arp-ratchet',
+        setter: (value) => {
+          this.updateRatchetCount(parseInt(value));
+        },
+        type: 'select'
+      },
+
+      // Latch mode
+      {
+        id: 'latch-mode',
+        setter: (value) => {
+          this.keyboardInput.setLatchMode(value === 'true');
+        },
+        type: 'checkbox'
       }
     ];
 
@@ -521,6 +570,42 @@ class MIDIController {
     } else {
       this.arpeggiator.setTimingStrategy(baseStrategy);
     }
+  }
+
+  /**
+   * Updates the velocity humanize state
+   * Applies random ±10 velocity variation to arpeggiator notes
+   */
+  private updateVelocityHumanizeState(enabled: boolean): void {
+    if (enabled) {
+      this.arpeggiator.setVelocityHumanize(new VelocityHumanize(1.0, this.timingSeed));
+    } else {
+      this.arpeggiator.setVelocityHumanize(null);
+    }
+  }
+
+  /**
+   * Updates the accent pattern for velocity emphasis
+   * Emphasizes certain beats based on the selected pattern
+   */
+  private updateAccentPattern(type: 'none' | 'downbeats' | 'offbeats' | 'every-3rd'): void {
+    this.arpeggiator.setAccentPattern(type);
+  }
+
+  /**
+   * Updates the gate probability (note skip chance)
+   * Lower values create more generative/sparse patterns
+   */
+  private updateGateProbability(chance: number): void {
+    this.arpeggiator.setGateProbability(chance);
+  }
+
+  /**
+   * Updates the ratchet count (note repeat subdivision)
+   * Values > 1 create rapid note repeats within each step
+   */
+  private updateRatchetCount(count: number): void {
+    this.arpeggiator.setRatchetCount(count);
   }
 
   /**

@@ -121,6 +121,41 @@
                     Humanize
                 </label>
             </div>
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="arp-humanize-velocity">
+                    Humanize Velocity
+                </label>
+            </div>
+            <div class="control-group">
+                <label for="arp-accent">Accent</label>
+                <select id="arp-accent">
+                    <option value="none">None</option>
+                    <option value="downbeats">Downbeats</option>
+                    <option value="offbeats">Offbeats</option>
+                    <option value="every-3rd">Every 3rd</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Probability</label>
+                <input type="range" id="arp-probability" min="0" max="100" value="100">
+                <span id="arp-probability-value">100%</span>
+            </div>
+            <div class="control-group">
+                <label for="arp-ratchet">Ratchet</label>
+                <select id="arp-ratchet">
+                    <option value="1">Off</option>
+                    <option value="2">2x</option>
+                    <option value="3">3x</option>
+                    <option value="4">4x</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="latch-mode">
+                    Latch Mode
+                </label>
+            </div>
         </div>
     </div>
 

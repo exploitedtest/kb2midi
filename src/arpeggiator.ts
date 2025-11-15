@@ -126,7 +126,7 @@ export class HumanizeTiming implements TimingStrategy {
     return x - Math.floor(x);
   }
 
-  getDelayOffset(globalStep: number, _baseStepMs: number): number {
+  getDelayOffset(globalStep: number, baseStepMs: number): number {
     if (this.maxVariationMs === 0) {
       return 0;
     }
@@ -134,9 +134,15 @@ export class HumanizeTiming implements TimingStrategy {
     // Generate consistent variation for this step (-1 to 1)
     const variation = (this.seededRandom(globalStep) - 0.5) * 2;
 
-    // Apply variation (-maxVariationMs to +maxVariationMs)
+    // Tempo-adaptive: Scale variation with tempo
+    // At fast tempos (short steps), use less variation; at slow tempos, use more
+    // Reference: 125ms step (120 BPM 16ths) = 1.0x scaling
+    const tempoScale = Math.min(baseStepMs / 125, 1.0);
+    const adaptiveMax = this.maxVariationMs * tempoScale;
+
+    // Apply variation (-adaptiveMax to +adaptiveMax)
     // Negative values mean play early, positive means play late
-    return variation * this.maxVariationMs;
+    return variation * adaptiveMax;
   }
 }
 
@@ -160,6 +166,88 @@ export class LayeredTiming implements TimingStrategy {
       (total, strategy) => total + strategy.getDelayOffset(globalStep, baseStepMs),
       0
     );
+  }
+}
+
+/**
+ * Velocity Humanization - Adds random velocity variation to each step
+ * Creates natural velocity variations like a human player
+ */
+export class VelocityHumanize {
+  private maxVariation: number;
+  private seed: number;
+
+  constructor(amount: number, seed?: number) {
+    const clamped = Math.max(0, Math.min(1, amount));
+    // Map amount (0-1) to max variation of ±10 velocity units
+    this.maxVariation = clamped * 10;
+    this.seed = seed ?? Math.random() * 1000000;
+  }
+
+  private seededRandom(index: number): number {
+    const x = Math.sin(this.seed + index * 12.9898) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  getVelocityOffset(globalStep: number): number {
+    if (this.maxVariation === 0) return 0;
+
+    // Generate consistent variation for this step (-1 to 1)
+    const variation = (this.seededRandom(globalStep) - 0.5) * 2;
+    return Math.round(variation * this.maxVariation);
+  }
+}
+
+/**
+ * Accent Pattern - Applies velocity multipliers to emphasize certain beats
+ */
+export class AccentPattern {
+  private pattern: number[];
+
+  constructor(type: 'none' | 'downbeats' | 'offbeats' | 'every-3rd') {
+    switch (type) {
+      case 'downbeats':
+        this.pattern = [1.25, 1.0, 1.0, 1.0]; // Emphasize every 4th step
+        break;
+      case 'offbeats':
+        this.pattern = [1.0, 1.0, 1.25, 1.0]; // Emphasize 3rd step (offbeat)
+        break;
+      case 'every-3rd':
+        this.pattern = [1.0, 1.0, 1.2]; // Every 3 steps
+        break;
+      case 'none':
+      default:
+        this.pattern = [1.0];
+        break;
+    }
+  }
+
+  getVelocityMultiplier(globalStep: number): number {
+    return this.pattern[globalStep % this.pattern.length];
+  }
+}
+
+/**
+ * Gate Probability - Randomly skips notes based on probability
+ * Creates evolving, generative patterns
+ */
+export class GateProbability {
+  private chance: number;
+  private seed: number;
+
+  constructor(chance: number, seed?: number) {
+    this.chance = Math.max(0, Math.min(1, chance));
+    this.seed = seed ?? Math.random() * 1000000;
+  }
+
+  private seededRandom(index: number): number {
+    const x = Math.sin(this.seed + index * 9.8765) * 54321.1234;
+    return x - Math.floor(x);
+  }
+
+  shouldPlayStep(globalStep: number): boolean {
+    if (this.chance >= 1.0) return true;
+    return this.seededRandom(globalStep) < this.chance;
   }
 }
 
@@ -202,6 +290,11 @@ export class Arpeggiator {
   private getVelocity: (() => number) | null = null;
   private stepCounter: number = 0; // Global step counter for timing patterns
   private timingStrategy: TimingStrategy = new StraightTiming(); // Default: no timing offset
+  private velocityHumanize: VelocityHumanize | null = null;
+  private accentPattern: AccentPattern = new AccentPattern('none');
+  private gateProbability: GateProbability = new GateProbability(1.0);
+  private ratchetCount: number = 1; // Note repeat count per step
+  private probabilitySeed: number = Math.random() * 1000000;
 
   constructor(clockSync: ClockSync) {
     this.clockSync = clockSync;
@@ -319,6 +412,38 @@ export class Arpeggiator {
   }
 
   /**
+   * Sets velocity humanization
+   * @param humanize - VelocityHumanize instance (null = no humanization)
+   */
+  setVelocityHumanize(humanize: VelocityHumanize | null): void {
+    this.velocityHumanize = humanize;
+  }
+
+  /**
+   * Sets accent pattern for velocity emphasis
+   * @param type - Pattern type ('none', 'downbeats', 'offbeats', 'every-3rd')
+   */
+  setAccentPattern(type: 'none' | 'downbeats' | 'offbeats' | 'every-3rd'): void {
+    this.accentPattern = new AccentPattern(type);
+  }
+
+  /**
+   * Sets gate probability (chance of playing each step)
+   * @param chance - 0-1, where 1 = always play, 0 = never play
+   */
+  setGateProbability(chance: number): void {
+    this.gateProbability = new GateProbability(chance, this.probabilitySeed);
+  }
+
+  /**
+   * Sets note repeat/ratcheting count
+   * @param count - Number of times to repeat each note (1 = no repeat, 2 = double, 4 = quad)
+   */
+  setRatchetCount(count: number): void {
+    this.ratchetCount = Math.max(1, Math.min(4, Math.floor(count)));
+  }
+
+  /**
    * Sets the octave range
    */
   setOctaveRange(octaveRange: number): void {
@@ -393,8 +518,25 @@ export class Arpeggiator {
         return;
       }
 
+      // Check gate probability - skip this step if probability fails
+      if (!this.gateProbability.shouldPlayStep(this.stepCounter)) {
+        this.stepCounter++;
+        return;
+      }
+
       const channel = this.getChannel ? this.getChannel() : 1;
-      const velocity = this.getVelocity ? this.getVelocity() : 80;
+      let baseVelocity = this.getVelocity ? this.getVelocity() : 80;
+
+      // Apply accent pattern
+      const accentMultiplier = this.accentPattern.getVelocityMultiplier(this.stepCounter);
+      baseVelocity = Math.round(baseVelocity * accentMultiplier);
+
+      // Apply velocity humanization
+      if (this.velocityHumanize) {
+        const offset = this.velocityHumanize.getVelocityOffset(this.stepCounter);
+        baseVelocity = Math.max(1, Math.min(127, baseVelocity + offset));
+      }
+
       const stepTimeMs = this.getStepTimeMs();
       const gateTime = Math.min(this.calculateGateTime(), Math.max(0, stepTimeMs - 2)); // leave a tiny headroom to avoid overlap
 
@@ -411,7 +553,7 @@ export class Arpeggiator {
           : this.getStackedChordNotes();
 
         notesToPlay.forEach(note => {
-          this.playNoteWithGate(note, velocity, channel, gateTime);
+          this.playNoteWithRatchet(note, baseVelocity, channel, gateTime, stepTimeMs);
           this.onStepCallbacks.forEach(callback => {
             try {
               callback(this.state.currentStep, note);
@@ -420,12 +562,12 @@ export class Arpeggiator {
             }
           });
         });
-        
+
       } else {
         // Pattern modes: play notesPerStep notes at a time (sliding window)
         const notesToPlay: number[] = [];
         const sequenceLength = this.state.noteOrder.length;
-        
+
         // Collect notesPerStep notes starting from currentStep
         for (let i = 0; i < this.state.notesPerStep && i < sequenceLength; i++) {
           const noteIndex = (this.state.currentStep + i) % sequenceLength;
@@ -434,7 +576,7 @@ export class Arpeggiator {
 
         // Play all notes in the window
         notesToPlay.forEach(note => {
-          this.playNoteWithGate(note, velocity, channel, gateTime);
+          this.playNoteWithRatchet(note, baseVelocity, channel, gateTime, stepTimeMs);
 
           this.onStepCallbacks.forEach(callback => {
             try {
@@ -578,6 +720,40 @@ private getStepTimeMs(): number {
   const bpm = this.clockSync.getBPM();
   const beatTime = (60 / bpm) * 1000; // ms per quarter note
   return beatTime / this.state.clockDivisor;
+}
+
+/**
+ * Plays a note with optional ratcheting (note repeat within the step)
+ * @param note - MIDI note number
+ * @param velocity - Note velocity
+ * @param channel - MIDI channel
+ * @param gateTime - Gate duration for each repeat
+ * @param stepTimeMs - Total step duration (for calculating ratchet subdivisions)
+ */
+private playNoteWithRatchet(note: number, velocity: number, channel: number, gateTime: number, stepTimeMs: number): void {
+  if (this.ratchetCount === 1) {
+    // No ratcheting, play normally
+    this.playNoteWithGate(note, velocity, channel, gateTime);
+    return;
+  }
+
+  // Ratcheting: subdivide the step and play multiple times
+  const subStepTime = stepTimeMs / this.ratchetCount;
+  const subGateTime = Math.min(gateTime / this.ratchetCount, subStepTime * 0.9); // Leave 10% gap
+
+  for (let i = 0; i < this.ratchetCount; i++) {
+    const delay = i * subStepTime;
+    if (delay === 0) {
+      // Play first note immediately
+      this.playNoteWithGate(note, velocity, channel, subGateTime);
+    } else {
+      // Schedule subsequent repeats
+      const timeout = setTimeout(() => {
+        this.playNoteWithGate(note, velocity, channel, subGateTime);
+      }, delay);
+      this.activeTimeouts.add(timeout);
+    }
+  }
 }
 
 /**
