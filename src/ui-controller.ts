@@ -898,6 +898,42 @@ export class UIController {
   }
 
   /**
+   * Listen for clock source selection changes
+   */
+  onClockSourceChange(handler: (source: string) => void): void {
+    const clockSourceSelect = document.getElementById('clock-source') as HTMLSelectElement;
+    if (!clockSourceSelect) return;
+    clockSourceSelect.addEventListener('change', () => {
+      handler(clockSourceSelect.value);
+    });
+  }
+
+  /**
+   * Listen for internal BPM changes
+   */
+  onInternalBPMChange(handler: (bpm: number) => void): void {
+    const internalBPMInput = document.getElementById('internal-bpm') as HTMLInputElement;
+    if (!internalBPMInput) return;
+    internalBPMInput.addEventListener('change', () => {
+      const bpm = parseInt(internalBPMInput.value);
+      if (!isNaN(bpm)) {
+        handler(bpm);
+      }
+    });
+  }
+
+  /**
+   * Listen for internal clock toggle button clicks
+   */
+  onInternalClockToggle(handler: () => void): void {
+    const toggleButton = document.getElementById('internal-clock-toggle');
+    if (!toggleButton) return;
+    toggleButton.addEventListener('click', () => {
+      handler();
+    });
+  }
+
+  /**
    * Schedules a batched UI update using requestAnimationFrame
    * Prevents excessive DOM manipulation during high-speed sequences
    */

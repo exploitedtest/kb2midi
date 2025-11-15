@@ -42,10 +42,27 @@
         </div>
         
         <div class="control-group">
+            <label for="clock-source">Clock Source</label>
+            <select id="clock-source">
+                <option value="external">External MIDI</option>
+                <option value="internal">Internal Master</option>
+                <option value="off">Off</option>
+            </select>
+        </div>
+
+        <div class="control-group" id="external-clock-controls">
             <label for="midi-clock-input">Clock Input</label>
             <select id="midi-clock-input">
                 <option value="auto">Auto (Best)</option>
             </select>
+        </div>
+
+        <div class="control-group" id="internal-clock-controls" style="display: none;">
+            <label for="internal-bpm">BPM</label>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <input type="number" id="internal-bpm" min="20" max="300" value="120" style="width: 60px;">
+                <button id="internal-clock-toggle" style="padding: 4px 12px;">Start</button>
+            </div>
         </div>
 
         <div class="control-group">
