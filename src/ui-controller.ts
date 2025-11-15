@@ -30,9 +30,13 @@ export class UIController {
   private pitchIndicator: HTMLElement | null = null;
   private octaveDownIndicator: HTMLElement | null = null;
   private octaveUpIndicator: HTMLElement | null = null;
-  
+
   private activeKeys = new Map<number, HTMLElement>();
   private keyElements = new Map<string, HTMLElement>();
+
+  // Scale highlighting
+  private scaleNotes: Set<number> = new Set();
+  private scaleHighlightEnabled: boolean = false;
   
   // Unified control registry
   private controls = new Map<string, UIControl>();
@@ -394,37 +398,40 @@ export class UIController {
    * @returns The created key element
    */
   private createPianoKey(
-    noteOffset: number, 
-    baseOctave: number, 
-    keyBinding: string, 
-    isBlack: boolean = false, 
+    noteOffset: number,
+    baseOctave: number,
+    keyBinding: string,
+    isBlack: boolean = false,
     leftPosition?: number
   ): HTMLElement {
     const key = document.createElement('div');
     key.className = `key ${isBlack ? 'black-key' : 'white-key'}`;
     const note = (baseOctave * 12) + noteOffset;
     key.dataset.note = note.toString();
-    
+
     if (leftPosition !== undefined) {
       key.style.left = `${leftPosition}px`;
     }
-    
+
     const label = document.createElement('div');
     label.className = isBlack ? 'black-key-label' : 'key-label';
-    
+
     if (isBlack) {
       label.textContent = keyBinding;
     } else {
       label.innerHTML = `<span class="note-label">${getMIDINoteName(note)}</span><br><span class="key-binding">${keyBinding}</span>`;
     }
-    
+
     key.appendChild(label);
-    
+
     // Add event listeners
     key.addEventListener('mousedown', () => this.handlePianoClick(note, true));
     key.addEventListener('mouseup', () => this.handlePianoClick(note, false));
     key.addEventListener('mouseleave', () => this.handlePianoClick(note, false));
-    
+
+    // Apply scale highlighting if enabled
+    this.updateKeyScaleHighlight(key, note);
+
     return key;
   }
 
@@ -936,6 +943,34 @@ export class UIController {
     if (this.updateScheduled) {
       this.flushUpdates();
       this.updateScheduled = false;
+    }
+  }
+
+  /**
+   * Sets which notes are in the current scale for highlighting
+   * @param scaleNotes - Array of MIDI note numbers that are in the scale
+   * @param enabled - Whether scale highlighting should be enabled
+   */
+  setScaleHighlight(scaleNotes: number[], enabled: boolean): void {
+    this.scaleNotes = new Set(scaleNotes);
+    this.scaleHighlightEnabled = enabled;
+
+    // Update all piano keys with scale highlighting
+    this.activeKeys.forEach((keyElement, note) => {
+      this.updateKeyScaleHighlight(keyElement, note);
+    });
+  }
+
+  /**
+   * Updates a single key element with scale highlighting
+   * @param keyElement - The DOM element representing the key
+   * @param note - The MIDI note number
+   */
+  private updateKeyScaleHighlight(keyElement: HTMLElement, note: number): void {
+    if (this.scaleHighlightEnabled && this.scaleNotes.has(note)) {
+      keyElement.classList.add('in-scale');
+    } else {
+      keyElement.classList.remove('in-scale');
     }
   }
 }
