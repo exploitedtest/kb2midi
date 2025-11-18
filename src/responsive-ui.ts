@@ -35,6 +35,8 @@ export class ResponsiveUI {
   private viewportChangeHandlers: ((info: ViewportInfo) => void)[] = [];
   private orientationChangeHandlers: ((orientation: Orientation) => void)[] = [];
   private resizeObserver: ResizeObserver | null = null;
+  private readonly resizeListener = () => this.handleResize();
+  private readonly orientationListener = () => this.handleOrientationChange();
 
   // Touch gesture tracking
   private touchStartX: number = 0;
@@ -56,6 +58,7 @@ export class ResponsiveUI {
   private lastAcceleration: { x: number; y: number; z: number } | null = null;
   private lastShakeTime: number = 0;
   private shakeHandlers: (() => void)[] = [];
+  private motionListener: ((event: DeviceMotionEvent) => void) | null = null;
   private readonly SHAKE_THRESHOLD = 15; // m/s²
   private readonly SHAKE_COOLDOWN = 1000; // ms between shake events
 
@@ -121,10 +124,10 @@ export class ResponsiveUI {
    */
   private setupListeners(): void {
     // Viewport resize
-    window.addEventListener('resize', () => this.handleResize());
+    window.addEventListener('resize', this.resizeListener);
 
     // Orientation change
-    window.addEventListener('orientationchange', () => this.handleOrientationChange());
+    window.addEventListener('orientationchange', this.orientationListener);
 
     // Also use ResizeObserver for more granular updates
     if (typeof ResizeObserver !== 'undefined') {
@@ -404,36 +407,49 @@ export class ResponsiveUI {
 
     this.shakeHandlers.push(onShake);
 
-    if (this.shakeEnabled) {
-      // Already enabled, just add the handler
-      return;
-    }
-
     // Check for DeviceMotion API support
     if (typeof DeviceMotionEvent === 'undefined') {
       console.warn('DeviceMotion API not supported');
       return;
     }
 
+    if (this.shakeEnabled) {
+      // Already enabled, just add the handler
+      return;
+    }
+
+    const startListening = () => {
+      if (this.shakeEnabled) return;
+      this.shakeEnabled = true;
+      this.setupShakeListener();
+    };
+
     // Request permission on iOS 13+
     if (
       typeof (DeviceMotionEvent as any).requestPermission === 'function'
     ) {
-      (DeviceMotionEvent as any)
-        .requestPermission()
-        .then((permissionState: string) => {
-          if (permissionState === 'granted') {
-            this.setupShakeListener();
-          } else {
-            console.warn('DeviceMotion permission denied');
-          }
-        })
-        .catch((error: Error) => {
-          console.error('Error requesting DeviceMotion permission:', error);
-        });
+      const requestPermission = () => {
+        (DeviceMotionEvent as any)
+          .requestPermission()
+          .then((permissionState: string) => {
+            if (permissionState === 'granted') {
+              startListening();
+            } else {
+              console.warn('DeviceMotion permission denied');
+            }
+          })
+          .catch((error: Error) => {
+            console.error('Error requesting DeviceMotion permission:', error);
+          });
+      };
+
+      // iOS requires a user gesture; hook the next tap/click to request permission
+      const onceOptions = { once: true } as const;
+      window.addEventListener('click', requestPermission, onceOptions);
+      window.addEventListener('touchend', requestPermission, onceOptions);
     } else {
       // Non-iOS or older iOS, just set up the listener
-      this.setupShakeListener();
+      startListening();
     }
   }
 
@@ -441,10 +457,12 @@ export class ResponsiveUI {
    * Sets up the device motion event listener
    */
   private setupShakeListener(): void {
-    this.shakeEnabled = true;
+    if (this.motionListener) {
+      return; // already listening
+    }
 
-    window.addEventListener('devicemotion', (event: DeviceMotionEvent) => {
-      if (!event.accelerationIncludingGravity) {
+    this.motionListener = (event: DeviceMotionEvent) => {
+      if (!this.shakeEnabled || !event.accelerationIncludingGravity) {
         return;
       }
 
@@ -481,7 +499,9 @@ export class ResponsiveUI {
         this.lastShakeTime = now;
         this.notifyShake();
       }
-    }, { passive: true });
+    };
+
+    window.addEventListener('devicemotion', this.motionListener, { passive: true });
   }
 
   /**
@@ -498,16 +518,19 @@ export class ResponsiveUI {
   disableShakeDetection(): void {
     this.shakeEnabled = false;
     this.shakeHandlers = [];
-    // Note: Can't easily remove the devicemotion listener without storing a reference
-    // For now, we just clear handlers and check shakeEnabled flag
+
+    if (this.motionListener) {
+      window.removeEventListener('devicemotion', this.motionListener);
+      this.motionListener = null;
+    }
   }
 
   /**
    * Cleanup and remove all listeners
    */
   cleanup(): void {
-    window.removeEventListener('resize', () => this.handleResize());
-    window.removeEventListener('orientationchange', () => this.handleOrientationChange());
+    window.removeEventListener('resize', this.resizeListener);
+    window.removeEventListener('orientationchange', this.orientationListener);
 
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
