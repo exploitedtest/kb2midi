@@ -972,7 +972,7 @@ class MIDIController {
       const found = inputs.find(i => i.id === sourceId);
       if (found) {
         this.midiEngine.setNoteInput(found);
-        this.keyboardInput.cleanup(); // Disable keyboard listeners to avoid conflicts
+        this.keyboardInput.detach(); // Disable keyboard listeners to avoid conflicts (keep handlers)
         this.uiController.updateStatus(`Note Input: ${found.name || 'External MIDI'}`, 'info');
       } else {
         // Fallback to keyboard if device not found
