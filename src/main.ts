@@ -478,6 +478,10 @@ class MIDIController {
     
     const velocity = velocityOverride || this.uiController.getVelocity();
     const channel = this.uiController.getMidiChannel();
+    const allowLocalPlayback = !(
+      this.collaborativeController.isCollaborative() &&
+      this.collaborativeController.getMode() === 'student'
+    );
     
     // Validate velocity and channel
     if (velocity === undefined || velocity === null || velocity < 0 || velocity > 127) {
@@ -494,13 +498,18 @@ class MIDIController {
 
     if (this.arpeggiator.isEnabled()) {
       // When arpeggiator is enabled, add note to sequence in press order
-      this.arpeggiator.addNote(note);
+      // Only drive the local arpeggiator when we're actually outputting MIDI
+      if (allowLocalPlayback) {
+        this.arpeggiator.addNote(note);
+      }
 
-      // Update visual feedback to show key is "held" for arpeggiator
+      // Always show UI feedback so students still see key state even if muted locally
       this.uiController.updatePianoKey(note, true);
     } else {
       // When arpeggiator is disabled, play note immediately (normal behavior)
-      this.midiEngine.playNote(note, velocity, channel);
+      if (allowLocalPlayback) {
+        this.midiEngine.playNote(note, velocity, channel);
+      }
       this.uiController.updatePianoKey(note, true);
     }
 
@@ -520,10 +529,16 @@ class MIDIController {
     if (!activeNote) return;
     
     const channel = this.uiController.getMidiChannel();
+    const allowLocalPlayback = !(
+      this.collaborativeController.isCollaborative() &&
+      this.collaborativeController.getMode() === 'student'
+    );
     
     if (this.arpeggiator.isEnabled()) {
       // When arpeggiator is enabled, remove note from sequence
-      this.arpeggiator.removeNote(note);
+      if (allowLocalPlayback) {
+        this.arpeggiator.removeNote(note);
+      }
       this.state.activeNotes.delete(note.toString());
       this.uiController.updatePianoKey(note, false);
     } else {
@@ -532,7 +547,9 @@ class MIDIController {
         this.state.sustainedNotes.add(note);
       } else {
         const ch = activeNote.channel ?? channel;
-        this.midiEngine.stopNote(note, 0, ch);
+        if (allowLocalPlayback) {
+          this.midiEngine.stopNote(note, 0, ch);
+        }
         this.state.activeNotes.delete(note.toString());
         this.uiController.updatePianoKey(note, false);
       }
@@ -708,9 +725,16 @@ class MIDIController {
    */
   private stopAllNotes(): void {
     // Stop using the channels each note was played on
+    const allowLocalPlayback = !(
+      this.collaborativeController.isCollaborative() &&
+      this.collaborativeController.getMode() === 'student'
+    );
+
     this.state.activeNotes.forEach((activeNote) => {
       const ch = activeNote.channel ?? this.uiController.getMidiChannel();
-      this.midiEngine.stopNote(activeNote.note, 0, ch);
+      if (allowLocalPlayback) {
+        this.midiEngine.stopNote(activeNote.note, 0, ch);
+      }
       this.uiController.updatePianoKey(activeNote.note, false);
     });
     
