@@ -38,6 +38,7 @@ export class Arpeggiator {
   private lastProcessedTick: number = -1;
   private getChannel: (() => number) | null = null;
   private getVelocity: (() => number) | null = null;
+  private internalTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(clockSync: ClockSync) {
     this.clockSync = clockSync;
@@ -49,6 +50,11 @@ export class Arpeggiator {
    */
   private setupClockSync(): void {
     this.clockSync.onTick(() => {
+      // If an external clock is running, stop any internal fallback timer
+      if (this.internalTimer) {
+        this.stopInternalTimer();
+      }
+
       const currentTick = this.clockSync.getTicks();
     
       // De-duplicate ticks in case multiple listeners are attached
@@ -71,6 +77,14 @@ export class Arpeggiator {
       if (this.state.enabled) {
         this.state.currentStep = 0;
         this.lastProcessedTick = -1;
+        this.stopInternalTimer();
+      }
+    });
+
+    // When external clock stops, fall back to internal timer so arpeggiator keeps running
+    this.clockSync.onStop(() => {
+      if (this.state.enabled) {
+        this.startInternalTimer();
       }
     });
   }
@@ -106,7 +120,12 @@ export class Arpeggiator {
       this.clearAllTimeouts();
       this.stopAllNotes();
       this.state.currentStep = 0;
+      this.stopInternalTimer();
+      return;
     }
+    
+    // If no external clock is running, start an internal timer so the arp still plays
+    this.refreshTimingSource();
   }
 
   /**
@@ -125,6 +144,7 @@ export class Arpeggiator {
    */
   setClockDivisor(divisor: number): void {
     this.state.clockDivisor = divisor;
+    this.refreshTimingSource();
   }
 
   /**
@@ -367,63 +387,70 @@ export class Arpeggiator {
    * Calculates gate time based on BPM and gate length
    */
   private calculateGateTime(): number {
-    const bpm = this.clockSync.getBPM();
+    const bpm = this.getEffectiveBPM();
     const beatTime = (60 / bpm) * 1000; // ms per quarter note
     const stepTime = beatTime / this.state.clockDivisor;
     return stepTime * this.state.gateLength;
   }
 
-/**
- * Returns the duration (ms) of a single step at the current tempo/division
- */
-private getStepTimeMs(): number {
-  const bpm = this.clockSync.getBPM();
-  const beatTime = (60 / bpm) * 1000; // ms per quarter note
-  return beatTime / this.state.clockDivisor;
-}
-
-/**
- * Plays a single note and ensures it is stopped correctly on the same channel.
- * Also prevents overlaps by force-stopping a previous instance of the same note/channel
- * before retriggering, and tracks the timeout so it can be cancelled later.
- */
-private playNoteWithGate(note: number, velocity: number, channel: number, gateTime: number): void {
-  const key = `${note}:${channel}`;
-
-  // If this note is already gated on this channel, stop it before retriggering
-  const existing = this.heldNoteTimeouts.get(key);
-  if (existing) {
-    clearTimeout(existing);
-    this.activeTimeouts.delete(existing);
-    this.heldNoteTimeouts.delete(key);
-    try {
-      if (this.midiEngine) {
-        this.midiEngine.stopNote(note, 0, channel);
-      }
-    } catch (error) {
-      console.error('Error force-stopping active note:', error);
-    }
+  /**
+   * Returns the duration (ms) of a single step at the current tempo/division
+   */
+  private getStepTimeMs(): number {
+    const bpm = this.getEffectiveBPM();
+    const beatTime = (60 / bpm) * 1000; // ms per quarter note
+    return beatTime / this.state.clockDivisor;
   }
 
-  // Start note
-  this.midiEngine!.playNote(note, velocity, channel);
+  /**
+   * Uses external clock BPM when running; otherwise falls back to internal rate
+   */
+  private getEffectiveBPM(): number {
+    return this.clockSync.isRunning() ? this.clockSync.getBPM() : this.state.rate;
+  }
 
-  // Schedule stop on the same channel (no re-fetching the channel)
-  const timeout = setTimeout(() => {
-    this.activeTimeouts.delete(timeout);
-    this.heldNoteTimeouts.delete(key);
-    try {
-      if (this.midiEngine && this.state.enabled) {
-        this.midiEngine.stopNote(note, 0, channel);
+  /**
+   * Plays a single note and ensures it is stopped correctly on the same channel.
+   * Also prevents overlaps by force-stopping a previous instance of the same note/channel
+   * before retriggering, and tracks the timeout so it can be cancelled later.
+   */
+  private playNoteWithGate(note: number, velocity: number, channel: number, gateTime: number): void {
+    const key = `${note}:${channel}`;
+
+    // If this note is already gated on this channel, stop it before retriggering
+    const existing = this.heldNoteTimeouts.get(key);
+    if (existing) {
+      clearTimeout(existing);
+      this.activeTimeouts.delete(existing);
+      this.heldNoteTimeouts.delete(key);
+      try {
+        if (this.midiEngine) {
+          this.midiEngine.stopNote(note, 0, channel);
+        }
+      } catch (error) {
+        console.error('Error force-stopping active note:', error);
       }
-    } catch (error) {
-      console.error('Error stopping arpeggiator note:', error);
     }
-  }, gateTime);
 
-  this.activeTimeouts.add(timeout);
-  this.heldNoteTimeouts.set(key, timeout);
-}
+    // Start note
+    this.midiEngine!.playNote(note, velocity, channel);
+
+    // Schedule stop on the same channel (no re-fetching the channel)
+    const timeout = setTimeout(() => {
+      this.activeTimeouts.delete(timeout);
+      this.heldNoteTimeouts.delete(key);
+      try {
+        if (this.midiEngine && this.state.enabled) {
+          this.midiEngine.stopNote(note, 0, channel);
+        }
+      } catch (error) {
+        console.error('Error stopping arpeggiator note:', error);
+      }
+    }, gateTime);
+
+    this.activeTimeouts.add(timeout);
+    this.heldNoteTimeouts.set(key, timeout);
+  }
 
   /**
    * Advances to the next step in the sequence
@@ -517,6 +544,54 @@ private playNoteWithGate(note: number, velocity: number, channel: number, gateTi
    */
   onStep(callback: (step: number, note: number) => void): void {
     this.onStepCallbacks.push(callback);
+  }
+
+  /**
+   * Starts an internal interval-based clock when no external clock is available
+   */
+  private startInternalTimer(): void {
+    // Avoid double-starting
+    this.stopInternalTimer();
+
+    // Keep a sensible lower bound to avoid zero/NaN intervals
+    const interval = Math.max(10, this.getStepTimeMs());
+    this.internalTimer = setInterval(() => {
+      // If an external clock becomes available, stop the fallback timer
+      if (this.state.syncToClock && this.clockSync.isRunning()) {
+        this.stopInternalTimer();
+        return;
+      }
+
+      if (!this.state.enabled) return;
+      this.playCurrentStep();
+      this.advanceStep();
+    }, interval);
+  }
+
+  /**
+   * Stops the internal fallback timer if running
+   */
+  private stopInternalTimer(): void {
+    if (this.internalTimer) {
+      clearInterval(this.internalTimer);
+      this.internalTimer = null;
+    }
+  }
+
+  /**
+   * Decides whether to use the external clock or internal timer and (re)starts appropriately
+   */
+  private refreshTimingSource(): void {
+    if (!this.state.enabled) {
+      this.stopInternalTimer();
+      return;
+    }
+
+    if (this.clockSync.isRunning()) {
+      this.stopInternalTimer();
+    } else {
+      this.startInternalTimer();
+    }
   }
 
   /**
