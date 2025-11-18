@@ -4,13 +4,19 @@ import { ClockSync } from './clock-sync';
 /**
  * Timing Strategy Interface
  * Calculates timing offset (in ms) for a given step to create different musical feels
+ *
+ * NOTE: Negative (early) offsets are clamped to 0 because setTimeout cannot schedule
+ * early relative to "now". Achieving true early playback would require a different
+ * scheduler (e.g., performance.now-driven loop or AudioContext clock) and is outside
+ * the current architecture.
  */
 export interface TimingStrategy {
   /**
    * Calculate the delay offset for a step
    * @param globalStep - The global step counter (for patterns that need absolute position)
    * @param baseStepMs - The base duration of one step in milliseconds
-   * @returns Delay offset in milliseconds (can be negative for early playback)
+   * @returns Delay offset in milliseconds (can be negative to indicate early playback intent,
+   *          but negative offsets are clamped to 0 due to setTimeout limitations)
    */
   getDelayOffset(globalStep: number, baseStepMs: number): number;
 }
@@ -102,7 +108,8 @@ export class DottedTiming implements TimingStrategy {
 /**
  * Humanize Timing - Adds random timing variation to each step
  * Creates a more human, less robotic feel by randomly shifting timing
- * Can shift both early (negative offset) and late (positive offset)
+ * Generates both early (negative) and late (positive) offsets, though negative
+ * offsets are clamped to 0 by setTimeout, resulting in mainly late variations
  */
 export class HumanizeTiming implements TimingStrategy {
   private maxVariationMs: number;
@@ -288,7 +295,10 @@ export class Arpeggiator {
   private lastProcessedTick: number = -1;
   private getChannel: (() => number) | null = null;
   private getVelocity: (() => number) | null = null;
-  private stepCounter: number = 0; // Global step counter for timing patterns
+  // Global beat/step counter used by timing & humanization. It advances on every
+  // sequenced tick even when a note is probabilistically skipped so timing seeds
+  // stay aligned to the transport rather than to "notes that played".
+  private stepCounter: number = 0;
   private timingStrategy: TimingStrategy = new StraightTiming(); // Default: no timing offset
   private velocityHumanize: VelocityHumanize | null = null;
   private accentPattern: AccentPattern = new AccentPattern('none');
@@ -519,22 +529,27 @@ export class Arpeggiator {
       }
 
       // Check gate probability - skip this step if probability fails
+      // Gate probability happens per transport step (beat), not per played note.
+      // We still advance stepCounter to keep timing/humanize seeds in sync with the
+      // underlying clock even when a note is skipped.
       if (!this.gateProbability.shouldPlayStep(this.stepCounter)) {
         this.stepCounter++;
         return;
       }
+
+      const clampVelocity = (value: number) => Math.max(1, Math.min(127, Math.round(value)));
 
       const channel = this.getChannel ? this.getChannel() : 1;
       let baseVelocity = this.getVelocity ? this.getVelocity() : 80;
 
       // Apply accent pattern
       const accentMultiplier = this.accentPattern.getVelocityMultiplier(this.stepCounter);
-      baseVelocity = Math.round(baseVelocity * accentMultiplier);
+      baseVelocity = clampVelocity(baseVelocity * accentMultiplier);
 
       // Apply velocity humanization
       if (this.velocityHumanize) {
         const offset = this.velocityHumanize.getVelocityOffset(this.stepCounter);
-        baseVelocity = Math.max(1, Math.min(127, baseVelocity + offset));
+        baseVelocity = clampVelocity(baseVelocity + offset);
       }
 
       const stepTimeMs = this.getStepTimeMs();
@@ -542,7 +557,11 @@ export class Arpeggiator {
 
       // Calculate timing offset using strategy
       const timingOffset = this.timingStrategy.getDelayOffset(this.stepCounter, stepTimeMs);
-      const playbackDelay = Math.max(0, timingOffset); // Clamp to 0 minimum for setTimeout
+      // NOTE: setTimeout cannot accept negative delays, so negative offsets (early playback)
+      // are clamped to 0 (immediate playback). This means timing strategies like HumanizeTiming
+      // can only delay notes (positive offset), not advance them (negative offset).
+      // This is a known limitation of the setTimeout-based scheduling architecture.
+      const playbackDelay = Math.max(0, timingOffset);
 
       // Execute note playback after timing offset
       const executePlayback = () => {
@@ -591,7 +610,10 @@ export class Arpeggiator {
 
       // Schedule playback with timing offset
       if (playbackDelay > 0) {
-        const timeout = setTimeout(executePlayback, playbackDelay);
+        const timeout = setTimeout(() => {
+          this.activeTimeouts.delete(timeout); // Clean up timeout after firing
+          executePlayback();
+        }, playbackDelay);
         this.activeTimeouts.add(timeout);
       } else {
         // No delay, execute immediately
@@ -749,6 +771,7 @@ private playNoteWithRatchet(note: number, velocity: number, channel: number, gat
     } else {
       // Schedule subsequent repeats
       const timeout = setTimeout(() => {
+        this.activeTimeouts.delete(timeout);
         this.playNoteWithGate(note, velocity, channel, subGateTime);
       }, delay);
       this.activeTimeouts.add(timeout);
