@@ -144,13 +144,12 @@ class MIDIController {
     
     // Update UI when clock status changes
     this.clockSync.onStart(() => {
-      const bpm = this.clockSync.getBPM();
-      this.uiController.updateClockStatus('synced', bpm);
+      this.updateClockStatusDisplay('synced');
       this.updateArpeggiatorButtonText();
     });
 
     this.clockSync.onStop(() => {
-      this.uiController.updateClockStatus('stopped');
+      this.updateClockStatusDisplay('stopped');
       this.updateArpeggiatorButtonText();
     });
 
@@ -159,8 +158,7 @@ class MIDIController {
       const now = performance.now();
       if (now - lastBPMUpdate > 1000) { // Update every second
         if (this.clockSync.isRunning()) {
-          const bpm = this.clockSync.getBPM();
-          this.uiController.updateClockStatus('synced', bpm);
+          this.updateClockStatusDisplay('synced');
         }
         lastBPMUpdate = now;
       }
@@ -885,10 +883,16 @@ class MIDIController {
     // Update UI to show/hide appropriate controls
     const externalControls = document.getElementById('external-clock-controls');
     const internalControls = document.getElementById('internal-clock-controls');
+    const toggleButton = document.getElementById('internal-clock-toggle');
+    const isRunning = this.clockSync.isRunning();
 
     if (externalControls && internalControls) {
       externalControls.style.display = source === 'external' ? 'block' : 'none';
       internalControls.style.display = source === 'internal' ? 'block' : 'none';
+    }
+
+    if (toggleButton) {
+      toggleButton.textContent = source === 'internal' && this.clockSync.isRunning() ? 'Stop' : 'Start';
     }
 
     // Update status message
@@ -900,8 +904,23 @@ class MIDIController {
       this.uiController.updateStatus('Clock Disabled', 'info');
     }
 
+    // Keep clock status display in sync even when not running
+    const status = isRunning ? 'synced' : 'stopped';
+    this.updateClockStatusDisplay(status);
+
     // Update arpeggiator button text
     this.updateArpeggiatorButtonText();
+  }
+
+  /**
+   * Centralized helper to push clock status to the UI
+   */
+  private updateClockStatusDisplay(statusOverride?: 'synced' | 'free' | 'stopped', bpmOverride?: number): void {
+    const source = this.clockSync.getClockSource();
+    const bpm = bpmOverride !== undefined ? bpmOverride : this.clockSync.getBPM();
+    const bpmDisplay = bpm > 0 ? bpm : undefined;
+    const status = statusOverride ?? (this.clockSync.isRunning() ? 'synced' : 'stopped');
+    this.uiController.updateClockStatus(status, bpmDisplay, source);
   }
 
   /**
@@ -911,13 +930,19 @@ class MIDIController {
     const button = document.getElementById('internal-clock-toggle');
     if (!button) return;
 
+    if (this.clockSync.getClockSource() !== 'internal') {
+      this.uiController.updateStatus('Select "Internal Master" as clock source first', 'error');
+      button.textContent = 'Start';
+      return;
+    }
+
     if (this.clockSync.isRunning()) {
       this.clockSync.stopInternalClock();
-      button.textContent = 'Start';
     } else {
       this.clockSync.startInternalClock();
-      button.textContent = 'Stop';
     }
+
+    button.textContent = this.clockSync.isRunning() ? 'Stop' : 'Start';
   }
 
   /**
