@@ -101,6 +101,10 @@ export class MIDIEngine {
       if (event.port.state === 'disconnected' && event.port.id === this.state.midiOutput?.id) {
         this.state.isConnected = false;
         this.state.midiOutput = null;
+        // Drop any cached note state so future Note On events aren't suppressed
+        // after a hot-unplug (activeNotes is used to dedupe Note On)
+        this.activeNotes.clear();
+        this.sustainedNotes.clear();
         this.onStateChange?.(false);
         this.autoSelectOutput();
       } else if (event.port.state === 'connected' && !this.state.midiOutput) {
