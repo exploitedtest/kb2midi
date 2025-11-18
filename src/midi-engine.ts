@@ -95,22 +95,31 @@ export class MIDIEngine {
    * @param event - The MIDI connection event from the Web MIDI API
    */
   private handleMIDIStateChange(event: WebMidi.MIDIConnectionEvent): void {
-    console.log(`MIDI device ${event.port.name} ${event.port.state}`);
+    const port = event.port;
     
-    if (event.port.type === 'output') {
-      if (event.port.state === 'disconnected' && event.port.id === this.state.midiOutput?.id) {
+    // Some environments (and our tests) may dispatch statechange without a port attached
+    if (!port) {
+      console.warn('MIDI statechange event missing port information');
+      this.onPortsChange?.();
+      return;
+    }
+
+    console.log(`MIDI device ${port.name} ${port.state}`);
+    
+    if (port.type === 'output') {
+      if (port.state === 'disconnected' && port.id === this.state.midiOutput?.id) {
         this.state.isConnected = false;
         this.state.midiOutput = null;
         this.onStateChange?.(false);
         this.autoSelectOutput();
-      } else if (event.port.state === 'connected' && !this.state.midiOutput) {
+      } else if (port.state === 'connected' && !this.state.midiOutput) {
         this.autoSelectOutput();
       }
     }
 
-    if (event.port.type === 'input') {
+    if (port.type === 'input') {
       // If our current input disappeared, pick a new best input
-      if (event.port.state === 'disconnected' && event.port.id === this.state.midiInput?.id) {
+      if (port.state === 'disconnected' && port.id === this.state.midiInput?.id) {
         this.state.midiInput.onmidimessage = null;
         this.state.midiInput = null;
         // Reselect best available input

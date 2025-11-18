@@ -26,6 +26,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    // Keep Vitest focused on unit tests; Playwright handles e2e under tests/e2e
+    exclude: ['tests/e2e/**', 'node_modules/**', 'dist/**', 'release/**'],
     setupFiles: ['./tests/setup.ts'],
     coverage: {
       provider: 'v8',

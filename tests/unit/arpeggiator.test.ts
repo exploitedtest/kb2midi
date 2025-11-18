@@ -45,7 +45,8 @@ describe('Arpeggiator', () => {
   });
 
   afterEach(() => {
-    vi.restoreAllTimers();
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   describe('Basic Functionality', () => {

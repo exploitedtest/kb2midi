@@ -161,5 +161,5 @@ export interface ClockSyncState {
   ticks: number;
   bpm: number;
   status: 'synced' | 'free' | 'stopped';
-  lastTickTime: number;
+  lastTickTime: number | null;
 }
