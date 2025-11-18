@@ -12,6 +12,9 @@
 /* Component-specific styles are imported as CSS modules in their respective components */
 /* This file handles only global styles and variables */
 
+/* Temporary bridge: keep legacy global styles until components adopt CSS modules */
+@import '../../styles.css';
+
 /* Global z-index layering */
 .header,
 .controls,

@@ -22,6 +22,7 @@ export class ParticleEngine {
   private particles: Particle[] = [];
   private animationFrameId: number | null = null;
   private pianoElement: HTMLElement | null = null;
+  private resizeHandler: () => void;
 
   // Color palette inspired by Rousseau (rainbow gradient based on pitch)
   private colorPalette = [
@@ -54,7 +55,9 @@ export class ParticleEngine {
 
     // Set canvas size to match window
     this.resizeCanvas();
-    window.addEventListener('resize', () => this.resizeCanvas());
+    // Keep a stable handler reference so it can be removed on cleanup
+    this.resizeHandler = () => this.resizeCanvas();
+    window.addEventListener('resize', this.resizeHandler);
 
     // Get reference to piano element for positioning
     this.pianoElement = document.getElementById('piano');
@@ -241,8 +244,9 @@ export class ParticleEngine {
    * Cleanup resources
    */
   public cleanup(): void {
+    // Stop animation loop and free canvas resources
     this.stop();
     this.clear();
-    window.removeEventListener('resize', () => this.resizeCanvas());
+    window.removeEventListener('resize', this.resizeHandler);
   }
 }

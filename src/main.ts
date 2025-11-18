@@ -759,7 +759,8 @@ class MIDIController {
 
     // Clean up particle engine
     if (this.particleEngine) {
-      this.particleEngine.clear();
+      this.particleEngine.cleanup();
+      this.particleEngine = null;
     }
 
     // Clear local state
