@@ -123,6 +123,14 @@ export class ScaleFilter {
    * Check if filtering is currently enabled
    */
   isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  /**
+   * Returns true when filtering should actively constrain notes
+   * (i.e., enabled and not in chromatic/all-notes mode)
+   */
+  isFilteringActive(): boolean {
     return this.enabled && this.scaleType !== 'chromatic';
   }
 

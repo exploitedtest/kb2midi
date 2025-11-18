@@ -973,4 +973,19 @@ export class UIController {
       keyElement.classList.remove('in-scale');
     }
   }
+
+  /**
+   * Restores active key visual states after piano DOM rebuild
+   * @param activeNotes - Map of currently playing notes
+   */
+  restoreActiveKeyStates(activeNotes: Map<string, any>): void {
+    // Iterate over all currently playing notes and reapply visual state
+    activeNotes.forEach((noteInfo) => {
+      const note = noteInfo.note;
+      const keyElement = this.activeKeys.get(note);
+      if (keyElement) {
+        keyElement.classList.add('active');
+      }
+    });
+  }
 }
