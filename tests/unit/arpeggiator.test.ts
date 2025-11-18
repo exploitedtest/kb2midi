@@ -45,7 +45,9 @@ describe('Arpeggiator', () => {
   });
 
   afterEach(() => {
-    vi.restoreAllTimers();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   describe('Basic Functionality', () => {
@@ -462,6 +464,23 @@ describe('Arpeggiator', () => {
         expect(prob1.shouldPlayStep(i)).toBe(prob2.shouldPlayStep(i));
       }
     });
+
+    it('should skip playback when probability is zero', () => {
+      arpeggiator.setGateProbability(0);
+      arpeggiator.setEnabled(true);
+      arpeggiator.addNote(60);
+
+      clockSync.onMIDIStart();
+      let time = 0;
+      for (let i = 0; i < 24; i++) {
+        clockSync.onMIDIClockTick(time);
+        time += 20;
+      }
+
+      vi.runAllTimers();
+
+      expect(playedNotes.length).toBe(0);
+    });
   });
 
   describe('Ratcheting', () => {
@@ -476,6 +495,24 @@ describe('Arpeggiator', () => {
 
       arpeggiator.setRatchetCount(10);
       // Should clamp to 4 (tested via integration)
+    });
+
+    it('should repeat notes according to ratchet count', () => {
+      arpeggiator.setRatchetCount(2);
+      arpeggiator.addNote(60);
+      arpeggiator.setEnabled(true);
+
+      clockSync.onMIDIStart();
+      let time = 0;
+      for (let i = 0; i < 6; i++) {
+        clockSync.onMIDIClockTick(time);
+        time += 20;
+      }
+
+      vi.runAllTimers();
+
+      const note60Plays = playedNotes.filter(n => n.note === 60);
+      expect(note60Plays.length).toBe(2);
     });
   });
 
@@ -507,6 +544,30 @@ describe('Arpeggiator', () => {
       arpeggiator.setSlidingWindowOverlap(true);
       arpeggiator.setSlidingWindowOverlap(false);
       // Behavior tested in E2E
+    });
+
+    it('should slide windows without overlap when disabled', () => {
+      arpeggiator.setNotesPerStep(2);
+      arpeggiator.setSlidingWindowOverlap(false);
+      arpeggiator.setEnabled(true);
+
+      clockSync.onMIDIStart();
+      let time = 0;
+      for (let i = 0; i < 18; i++) {
+        clockSync.onMIDIClockTick(time);
+        time += 20;
+      }
+
+      vi.runAllTimers();
+
+      const groups: number[][] = [];
+      for (let i = 0; i < playedNotes.length; i += 2) {
+        groups.push([playedNotes[i]?.note, playedNotes[i + 1]?.note]);
+      }
+
+      expect(groups[0]).toEqual([60, 64]);
+      expect(groups[1]).toEqual([67, 72]);
+      expect(groups[2]).toEqual([60, 64]);
     });
   });
 

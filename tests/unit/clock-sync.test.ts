@@ -243,6 +243,60 @@ describe('ClockSync', () => {
       vi.advanceTimersByTime(200);
       expect(clockSync.isRunning()).toBe(false);
     });
+
+    it('should ignore stale intervals after manual stop/continue', () => {
+      let time = 0;
+
+      // Establish tempo around 120 BPM
+      for (let i = 0; i < 6; i++) {
+        clockSync.onMIDIClockTick(time);
+        time += 20.83;
+      }
+
+      clockSync.onMIDIStop();
+
+      // Pause for a while, then continue and resume ticks
+      time += 1000;
+      clockSync.onMIDIContinue();
+      clockSync.onMIDIClockTick(time);
+      time += 20.83;
+
+      for (let i = 0; i < 6; i++) {
+        clockSync.onMIDIClockTick(time);
+        time += 20.83;
+      }
+
+      const bpm = clockSync.getBPM();
+      expect(bpm).toBeGreaterThan(100);
+      expect(bpm).toBeLessThan(140);
+    });
+
+    it('should reset intervals after auto-stop timeout before resuming', () => {
+      let time = 0;
+      clockSync.onMIDIStart();
+
+      for (let i = 0; i < 6; i++) {
+        clockSync.onMIDIClockTick(time);
+        time += 20.83;
+      }
+
+      // Trigger auto-stop
+      vi.advanceTimersByTime(600);
+      expect(clockSync.isRunning()).toBe(false);
+
+      // New ticks after a long pause
+      time += 800;
+      clockSync.onMIDIClockTick(time);
+      time += 20.83;
+      for (let i = 0; i < 6; i++) {
+        clockSync.onMIDIClockTick(time);
+        time += 20.83;
+      }
+
+      const bpm = clockSync.getBPM();
+      expect(bpm).toBeGreaterThan(100);
+      expect(bpm).toBeLessThan(140);
+    });
   });
 
   describe('BPM Calculation Stability', () => {
