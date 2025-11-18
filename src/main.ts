@@ -880,6 +880,7 @@ class MIDIController {
       this.setupClockSyncCallbacks();
       this.arpeggiator.setMidiEngine(this.midiEngine);
       this.arpeggiator.reattachClockSync();
+      this.chordProgression.reattachClockSync();
 
       // Reattach keyboard listeners
       this.keyboardInput.attach();

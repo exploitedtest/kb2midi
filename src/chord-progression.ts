@@ -267,6 +267,13 @@ export class ChordProgressionEngine {
   }
 
   /**
+   * Reattach clock listeners after ClockSync callbacks are cleared (e.g., on cleanup/resume)
+   */
+  reattachClockSync(): void {
+    this.setupClockCallbacks();
+  }
+
+  /**
    * Sets up callbacks from the clock sync
    */
   private setupClockCallbacks(): void {
