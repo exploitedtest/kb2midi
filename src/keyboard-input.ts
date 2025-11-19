@@ -1,24 +1,29 @@
 import { KeyboardLayout } from './types';
+import { IMIDIInputSource } from './input-source';
 
 /**
  * Handles keyboard input and maps QWERTY keys to MIDI notes
  * Manages different keyboard layouts and provides event handling for note on/off events
+ * Implements IMIDIInputSource to work as one of many possible MIDI input sources
  */
-export class KeyboardInput {
+export class KeyboardInput implements IMIDIInputSource {
   private pressedKeys = new Set<string>();
   private keyDownHandlers = new Map<string, (velocity: number) => void>();
   private keyUpHandlers = new Map<string, () => void>();
   private specialKeyHandlers = new Map<string, () => void>();
-  
+
   private currentLayout: KeyboardLayout;
   private layouts = new Map<string, KeyboardLayout>();
   private currentVelocity: number = 80;
-  
+
   // Store bound handlers for cleanup
   private boundKeyDown: (event: KeyboardEvent) => void;
   private boundKeyUp: (event: KeyboardEvent) => void;
   private boundContextMenu: (event: Event) => void;
   private attached = false;
+
+  // IMIDIInputSource implementation
+  private active: boolean = true;
   
   constructor() {
     this.initializeLayouts();
@@ -256,20 +261,20 @@ export class KeyboardInput {
   }
 
   /**
-   * Registers a handler for when a specific key is pressed down
+   * Registers a handler for when a specific key is pressed down (keyboard-specific method)
    * @param keyCode - The key code to listen for (e.g., 'KeyA')
    * @param handler - Function called when the key is pressed, receives velocity
    */
-  onNoteOn(keyCode: string, handler: (velocity: number) => void): void {
+  onKeyPress(keyCode: string, handler: (velocity: number) => void): void {
     this.keyDownHandlers.set(keyCode, handler);
   }
 
   /**
-   * Registers a handler for when a specific key is released
+   * Registers a handler for when a specific key is released (keyboard-specific method)
    * @param keyCode - The key code to listen for (e.g., 'KeyA')
    * @param handler - Function called when the key is released
    */
-  onNoteOff(keyCode: string, handler: () => void): void {
+  onKeyRelease(keyCode: string, handler: () => void): void {
     this.keyUpHandlers.set(keyCode, handler);
   }
 
@@ -360,12 +365,76 @@ export class KeyboardInput {
     document.removeEventListener('keydown', this.boundKeyDown, { capture: true });
     document.removeEventListener('keyup', this.boundKeyUp);
     document.removeEventListener('contextmenu', this.boundContextMenu);
-    
+
     // Clear all handler maps
     this.keyDownHandlers.clear();
     this.keyUpHandlers.clear();
     this.specialKeyHandlers.clear();
     this.pressedKeys.clear();
     this.attached = false;
+    this.active = false;
+  }
+
+  // ============================================================================
+  // IMIDIInputSource Interface Implementation
+  // ============================================================================
+
+  /**
+   * Initializes the keyboard input source
+   * For keyboard input, this is synchronous and sets up event listeners
+   */
+  async initialize(): Promise<void> {
+    if (this.attached) return;
+    this.attach();
+  }
+
+  /**
+   * Gets the display name of this input source
+   */
+  getName(): string {
+    return 'QWERTY Keyboard';
+  }
+
+  /**
+   * Gets whether this input source is currently active
+   */
+  isActive(): boolean {
+    return this.active;
+  }
+
+  /**
+   * Sets whether this input source is currently active
+   */
+  setActive(active: boolean): void {
+    this.active = active;
+    // If deactivated, clear pressed keys to prevent stuck notes
+    if (!active) {
+      this.pressedKeys.clear();
+    }
+  }
+
+  /**
+   * Registers a unified note on callback for IMIDIInputSource interface
+   * For keyboard input, note on/off events are handled via key-specific handlers (onKeyPress/onKeyRelease)
+   * This method is required by the interface but not used directly by keyboard input
+   */
+  onNoteOn(_handler: (note: number, velocity: number) => void): void {
+    // Not used for keyboard input - notes are triggered by key-specific handlers
+  }
+
+  /**
+   * Registers a unified note off callback for IMIDIInputSource interface
+   * For keyboard input, note on/off events are handled via key-specific handlers (onKeyPress/onKeyRelease)
+   * This method is required by the interface but not used directly by keyboard input
+   */
+  onNoteOff(_handler: (note: number) => void): void {
+    // Not used for keyboard input - notes are triggered by key-specific handlers
+  }
+
+  /**
+   * Registers a special event callback (sustain, octave, mod wheel, pitch bend, etc.)
+   */
+  onSpecialEvent(action: string, handler: (...args: any[]) => void): void {
+    this.specialKeyHandlers.set(action, handler);
   }
 }

@@ -724,6 +724,55 @@ export class UIController {
   }
 
   /**
+   * Sets the handler for input source change events
+   * @param handler - Function called when the input source dropdown changes
+   */
+  onInputSourceChange(handler: (sourceType: string) => void): void {
+    const inputSourceSelect = document.getElementById('input-source') as HTMLSelectElement;
+    if (inputSourceSelect) {
+      inputSourceSelect.addEventListener('change', () => {
+        handler(inputSourceSelect.value);
+      });
+    }
+  }
+
+  /**
+   * Sets the handler for audio threshold slider changes
+   * @param handler - Function called when the audio threshold slider changes
+   */
+  onAudioThresholdChange(handler: (threshold: number) => void): void {
+    const thresholdSlider = document.getElementById('audio-threshold') as HTMLInputElement;
+    const thresholdValue = document.getElementById('audio-threshold-value');
+    if (thresholdSlider) {
+      thresholdSlider.addEventListener('input', () => {
+        const value = parseInt(thresholdSlider.value);
+        if (thresholdValue) {
+          thresholdValue.textContent = value.toString();
+        }
+        handler(value);
+      });
+    }
+  }
+
+  /**
+   * Sets the handler for audio smoothing slider changes
+   * @param handler - Function called when the audio smoothing slider changes
+   */
+  onAudioSmoothingChange(handler: (smoothing: number) => void): void {
+    const smoothingSlider = document.getElementById('audio-smoothing') as HTMLInputElement;
+    const smoothingValue = document.getElementById('audio-smoothing-value');
+    if (smoothingSlider) {
+      smoothingSlider.addEventListener('input', () => {
+        const value = parseInt(smoothingSlider.value);
+        if (smoothingValue) {
+          smoothingValue.textContent = value.toString();
+        }
+        handler(value);
+      });
+    }
+  }
+
+  /**
    * Shows the MIDI not available error message
    * Displays helpful information when Web MIDI API is not supported
    */

@@ -56,7 +56,7 @@
             </div>
         </div>
         
-        <div class="control-group">
+        <div class="control-group" id="octave-controls">
             <label>Octave</label>
             <div style="display:flex; gap:8px; justify-content:center;">
                 <div id="octave-down-indicator" class="wheel-indicator" title="Hold ArrowLeft">↓ Oct</div>
@@ -65,13 +65,37 @@
         </div>
         
         <div class="control-group">
+            <label>Input Source</label>
+            <select id="input-source">
+                <option value="keyboard">QWERTY Keyboard</option>
+                <option value="audio">Microphone (Audio-to-MIDI)</option>
+            </select>
+        </div>
+
+        <div class="control-group" id="layout-selector">
             <label>Keyboard Layout</label>
             <select id="layout-select">
                 <option value="expanded">Expanded</option>
                 <option value="simple">Simple</option>
             </select>
         </div>
-        
+
+        <div class="control-group" id="audio-controls" style="display: none;">
+            <label>Audio Settings</label>
+            <div style="display:flex; flex-direction: column; gap: 8px;">
+                <div style="display:flex; gap:8px; align-items: center;">
+                    <label style="min-width: 120px;">Sensitivity</label>
+                    <input type="range" id="audio-threshold" min="1" max="100" value="20" style="flex: 1;">
+                    <span id="audio-threshold-value">20</span>
+                </div>
+                <div style="display:flex; gap:8px; align-items: center;">
+                    <label style="min-width: 120px;">Smoothing</label>
+                    <input type="range" id="audio-smoothing" min="1" max="10" value="3" style="flex: 1;">
+                    <span id="audio-smoothing-value">3</span>
+                </div>
+            </div>
+        </div>
+
         <div class="control-group">
             <label>Actions</label>
             <button id="panic-button">Stop All Notes</button>
@@ -187,13 +211,23 @@
         </div>
         
         <h4>Step 2: Use the Controller</h4>
-        <p><strong>Layout Options:</strong> Use the dropdown to switch between Simple and Expanded layouts</p>
-        <p><strong>Simple Layout:</strong> A S D F G H J K L (white keys), W E T Y U O P (black keys)</p>
-        <p><strong>Expanded Layout:</strong> Z-/ (base octave), Q-P (upper octave), number row for sharps</p>
-        <p><strong>Octave:</strong> Hold ArrowLeft and ArrowRight to change octave</p>
-        <p><strong>Sustain:</strong> Hold SPACE</p>
-        <p><strong>Click "Connect MIDI" to enable MIDI output</strong></p>
-        <p><strong>Click on piano keys or use your computer keyboard to play!</strong></p>
+        <p><strong>Input Sources:</strong> Choose between QWERTY Keyboard or Microphone (Audio-to-MIDI)</p>
+        <p><strong>QWERTY Keyboard Mode:</strong></p>
+        <ul style="text-align: left; margin: 10px 0; padding-left: 20px;">
+            <li><strong>Layout Options:</strong> Switch between Simple and Expanded layouts</li>
+            <li><strong>Simple Layout:</strong> A S D F G H J K L (white keys), W E T Y U O P (black keys)</li>
+            <li><strong>Expanded Layout:</strong> Z-/ (base octave), Q-P (upper octave), number row for sharps</li>
+            <li><strong>Octave:</strong> Hold ArrowLeft and ArrowRight to change octave</li>
+            <li><strong>Sustain:</strong> Hold SPACE</li>
+        </ul>
+        <p><strong>Microphone Mode:</strong></p>
+        <ul style="text-align: left; margin: 10px 0; padding-left: 20px;">
+            <li>Grant microphone access when prompted</li>
+            <li>Sing or play a monophonic instrument (one note at a time)</li>
+            <li>Adjust sensitivity and smoothing for best results</li>
+            <li>Works best with clean, clear tones</li>
+        </ul>
+        <p><strong>Click on piano keys or use your input source to play!</strong></p>
         
         <h4>Step 3: Connect to Your DAW</h4>
         <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 15px 0;">

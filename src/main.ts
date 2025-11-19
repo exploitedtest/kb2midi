@@ -1,5 +1,5 @@
 import { MIDIEngine } from './midi-engine';
-import { KeyboardInput } from './keyboard-input';
+import { InputSourceManager, InputSourceType } from './input-manager';
 import { UIController } from './ui-controller';
 import { ClockSync } from './clock-sync';
 import { Arpeggiator } from './arpeggiator';
@@ -21,7 +21,7 @@ interface ControlConfig {
  */
 class MIDIController {
   private midiEngine: MIDIEngine;
-  private keyboardInput: KeyboardInput;
+  private inputManager: InputSourceManager;
   private uiController: UIController;
   private clockSync: ClockSync;
   private arpeggiator: Arpeggiator;
@@ -49,10 +49,10 @@ class MIDIController {
   constructor() {
     this.clockSync = new ClockSync();
     this.midiEngine = new MIDIEngine(this.clockSync);
-    this.keyboardInput = new KeyboardInput();
+    this.inputManager = new InputSourceManager();
     this.uiController = new UIController();
     this.arpeggiator = new Arpeggiator(this.clockSync);
-    
+
     this.initialize();
   }
 
@@ -95,19 +95,31 @@ class MIDIController {
     // Set up arpeggiator
     this.setupArpeggiator();
 
-    // Set up keyboard input handlers
+    // Initialize input manager
+    await this.inputManager.initialize();
+
+    // Set up input handlers (keyboard and audio)
+    this.setupInputHandlers();
+
+    // Set up keyboard-specific handlers
     this.setupKeyboardHandlers();
-    
+
     // Set up UI handlers
     this.setupUIHandlers();
-    
+
     // Wire up velocity changes to keyboard input
     this.uiController.onVelocityChange((velocity) => {
-      this.keyboardInput.setVelocity(velocity);
+      const keyboardInput = this.inputManager.getKeyboardInput();
+      if (keyboardInput) {
+        keyboardInput.setVelocity(velocity);
+      }
     });
-    
+
     // Initialize keyboard input velocity to match UI default
-    this.keyboardInput.setVelocity(this.uiController.getVelocity());
+    const keyboardInput = this.inputManager.getKeyboardInput();
+    if (keyboardInput) {
+      keyboardInput.setVelocity(this.uiController.getVelocity());
+    }
     
     // Initialize UI
     this.updateUI();
@@ -201,96 +213,77 @@ class MIDIController {
   }
 
   /**
-   * Sets up keyboard event handlers for the current layout
-   * Registers note on/off handlers for each key and special key handlers
+   * Sets up unified input handlers that work with any input source
+   * Routes note events from input sources to the MIDI engine/arpeggiator
    */
-  private setupKeyboardHandlers(): void {
-    const layout = this.keyboardInput.getLayout();
-    
-    // Register note handlers for each key in the layout
-    Object.entries(layout.keys).forEach(([keyCode, noteOffset]) => {
-      this.keyboardInput.onNoteOn(keyCode, (velocity) => {
-        const note = (this.state.currentOctave * 12) + noteOffset;
-        this.playNote(note, velocity);
-        this.uiController.updateKeyVisual(keyCode, true);
-      });
-      
-      this.keyboardInput.onNoteOff(keyCode, () => {
-        const note = (this.state.currentOctave * 12) + noteOffset;
-        this.stopNote(note);
-        this.uiController.updateKeyVisual(keyCode, false);
-      });
+  private setupInputHandlers(): void {
+    // Unified note on handler - works for keyboard, audio, or any future input source
+    this.inputManager.onNoteOn((note: number, velocity: number) => {
+      this.playNote(note, velocity);
+      this.uiController.updatePianoKey(note, true);
     });
-    
-    // Register special keys
-    this.keyboardInput.onSpecialKey('octaveDown', () => {
-      this.uiController.updateOctaveDownIndicator(true);
-      this.uiController.updateKeyVisual('ArrowLeft', true);
-    });
-    
-    this.keyboardInput.onSpecialKey('octaveUp', () => {
-      this.uiController.updateOctaveUpIndicator(true);
-      this.uiController.updateKeyVisual('ArrowRight', true);
-    });
-    
-    this.keyboardInput.onSpecialKey('octaveDownOff', () => {
-      this.changeOctave(-1);
-      this.uiController.updateOctaveDownIndicator(false);
-      this.uiController.updateKeyVisual('ArrowLeft', false);
-    });
-    
-    this.keyboardInput.onSpecialKey('octaveUpOff', () => {
-      this.changeOctave(1);
-      this.uiController.updateOctaveUpIndicator(false);
-      this.uiController.updateKeyVisual('ArrowRight', false);
-    });
-    
-    this.keyboardInput.onSpecialKey('sustainOn', () => {
-      this.handleSustainOn();
-    });
-    
-    this.keyboardInput.onSpecialKey('sustainOff', () => {
-      this.handleSustainOff();
-    });
-    
-    // Register sustain pedal
-    this.keyboardInput.registerSustainPedal();
 
-    // Register Mod Wheel and Pitch Bend momentary controls
-    this.keyboardInput.registerModWheel();
-    this.keyboardInput.registerPitchBend();
-    this.keyboardInput.registerArpBoost();
+    // Unified note off handler
+    this.inputManager.onNoteOff((note: number) => {
+      this.stopNote(note);
+      this.uiController.updatePianoKey(note, false);
+    });
 
-    // Special actions for Mod Wheel (ArrowUp)
-    this.keyboardInput.onSpecialKey('modOn', () => {
+    // Register special event handlers with input manager
+    // These will be routed from whatever input source is active
+    this.inputManager.onSpecialEvent('sustainOn', () => this.handleSustainOn());
+    this.inputManager.onSpecialEvent('sustainOff', () => this.handleSustainOff());
+
+    // Mod wheel events
+    this.inputManager.onSpecialEvent('modOn', () => {
       const channel = this.uiController.getMidiChannel();
       this.midiEngine.sendMessage({ type: 'cc', channel, controller: MIDI_MOD_WHEEL, value: 127 });
       this.uiController.updateModIndicator(true);
       this.uiController.updateKeyVisual('ArrowUp', true);
     });
-    this.keyboardInput.onSpecialKey('modOff', () => {
+    this.inputManager.onSpecialEvent('modOff', () => {
       const channel = this.uiController.getMidiChannel();
       this.midiEngine.sendMessage({ type: 'cc', channel, controller: MIDI_MOD_WHEEL, value: 0 });
       this.uiController.updateModIndicator(false);
       this.uiController.updateKeyVisual('ArrowUp', false);
     });
 
-    // Special actions for Pitch Bend Down (ArrowDown)
-    this.keyboardInput.onSpecialKey('pitchDownOn', () => {
+    // Pitch bend events
+    this.inputManager.onSpecialEvent('pitchDownOn', () => {
       const channel = this.uiController.getMidiChannel();
       this.midiEngine.sendMessage({ type: 'pitchbend', channel, bend: -8192 });
       this.uiController.updatePitchIndicator(true);
       this.uiController.updateKeyVisual('ArrowDown', true);
     });
-    this.keyboardInput.onSpecialKey('pitchDownOff', () => {
+    this.inputManager.onSpecialEvent('pitchDownOff', () => {
       const channel = this.uiController.getMidiChannel();
       this.midiEngine.sendMessage({ type: 'pitchbend', channel, bend: 0 });
       this.uiController.updatePitchIndicator(false);
       this.uiController.updateKeyVisual('ArrowDown', false);
     });
 
-    // Momentary arpeggiator rate boost (Tab)
-    this.keyboardInput.onSpecialKey('arpBoostOn', () => {
+    // Octave control events (keyboard-specific but routed through manager)
+    this.inputManager.onSpecialEvent('octaveDown', () => {
+      this.uiController.updateOctaveDownIndicator(true);
+      this.uiController.updateKeyVisual('ArrowLeft', true);
+    });
+    this.inputManager.onSpecialEvent('octaveUp', () => {
+      this.uiController.updateOctaveUpIndicator(true);
+      this.uiController.updateKeyVisual('ArrowRight', true);
+    });
+    this.inputManager.onSpecialEvent('octaveDownOff', () => {
+      this.changeOctave(-1);
+      this.uiController.updateOctaveDownIndicator(false);
+      this.uiController.updateKeyVisual('ArrowLeft', false);
+    });
+    this.inputManager.onSpecialEvent('octaveUpOff', () => {
+      this.changeOctave(1);
+      this.uiController.updateOctaveUpIndicator(false);
+      this.uiController.updateKeyVisual('ArrowRight', false);
+    });
+
+    // Arpeggiator rate boost (keyboard-specific)
+    this.inputManager.onSpecialEvent('arpBoostOn', () => {
       if (this.arpBoostActive) return;
       if (!this.arpeggiator.isEnabled()) return;
       const state = this.arpeggiator.getState();
@@ -303,7 +296,125 @@ class MIDIController {
       }
       this.arpBoostActive = true;
     });
-    this.keyboardInput.onSpecialKey('arpBoostOff', () => {
+    this.inputManager.onSpecialEvent('arpBoostOff', () => {
+      if (!this.arpBoostActive) return;
+      const base = this.arpBoostBaseDivisor ?? this.arpeggiator.getState().clockDivisor;
+      this.arpeggiator.setClockDivisor(base);
+      const sel = document.getElementById('arp-division') as HTMLSelectElement | null;
+      if (sel) sel.value = String(base);
+      this.arpBoostActive = false;
+      this.arpBoostBaseDivisor = null;
+    });
+  }
+
+  /**
+   * Sets up keyboard-specific event handlers for the current layout
+   * Registers note on/off handlers for each key and special key handlers
+   * Note: This is separate from setupInputHandlers because it deals with keyboard layout specifics
+   */
+  private setupKeyboardHandlers(): void {
+    const keyboardInput = this.inputManager.getKeyboardInput();
+    if (!keyboardInput) return;
+
+    const layout = keyboardInput.getLayout();
+    
+    // Register note handlers for each key in the layout
+    Object.entries(layout.keys).forEach(([keyCode, noteOffset]) => {
+      keyboardInput.onKeyPress(keyCode, (velocity) => {
+        const note = (this.state.currentOctave * 12) + noteOffset;
+        this.playNote(note, velocity);
+        this.uiController.updateKeyVisual(keyCode, true);
+      });
+
+      keyboardInput.onKeyRelease(keyCode, () => {
+        const note = (this.state.currentOctave * 12) + noteOffset;
+        this.stopNote(note);
+        this.uiController.updateKeyVisual(keyCode, false);
+      });
+    });
+
+    // Register special keys with local handlers
+    keyboardInput.onSpecialKey('octaveDown', () => {
+      this.uiController.updateOctaveDownIndicator(true);
+      this.uiController.updateKeyVisual('ArrowLeft', true);
+    });
+
+    keyboardInput.onSpecialKey('octaveUp', () => {
+      this.uiController.updateOctaveUpIndicator(true);
+      this.uiController.updateKeyVisual('ArrowRight', true);
+    });
+
+    keyboardInput.onSpecialKey('octaveDownOff', () => {
+      this.changeOctave(-1);
+      this.uiController.updateOctaveDownIndicator(false);
+      this.uiController.updateKeyVisual('ArrowLeft', false);
+    });
+
+    keyboardInput.onSpecialKey('octaveUpOff', () => {
+      this.changeOctave(1);
+      this.uiController.updateOctaveUpIndicator(false);
+      this.uiController.updateKeyVisual('ArrowRight', false);
+    });
+
+    keyboardInput.onSpecialKey('sustainOn', () => {
+      this.handleSustainOn();
+    });
+
+    keyboardInput.onSpecialKey('sustainOff', () => {
+      this.handleSustainOff();
+    });
+
+    // Register sustain pedal
+    keyboardInput.registerSustainPedal();
+
+    // Register Mod Wheel and Pitch Bend momentary controls
+    keyboardInput.registerModWheel();
+    keyboardInput.registerPitchBend();
+    keyboardInput.registerArpBoost();
+
+    // Special actions for Mod Wheel (ArrowUp)
+    keyboardInput.onSpecialKey('modOn', () => {
+      const channel = this.uiController.getMidiChannel();
+      this.midiEngine.sendMessage({ type: 'cc', channel, controller: MIDI_MOD_WHEEL, value: 127 });
+      this.uiController.updateModIndicator(true);
+      this.uiController.updateKeyVisual('ArrowUp', true);
+    });
+    keyboardInput.onSpecialKey('modOff', () => {
+      const channel = this.uiController.getMidiChannel();
+      this.midiEngine.sendMessage({ type: 'cc', channel, controller: MIDI_MOD_WHEEL, value: 0 });
+      this.uiController.updateModIndicator(false);
+      this.uiController.updateKeyVisual('ArrowUp', false);
+    });
+
+    // Special actions for Pitch Bend Down (ArrowDown)
+    keyboardInput.onSpecialKey('pitchDownOn', () => {
+      const channel = this.uiController.getMidiChannel();
+      this.midiEngine.sendMessage({ type: 'pitchbend', channel, bend: -8192 });
+      this.uiController.updatePitchIndicator(true);
+      this.uiController.updateKeyVisual('ArrowDown', true);
+    });
+    keyboardInput.onSpecialKey('pitchDownOff', () => {
+      const channel = this.uiController.getMidiChannel();
+      this.midiEngine.sendMessage({ type: 'pitchbend', channel, bend: 0 });
+      this.uiController.updatePitchIndicator(false);
+      this.uiController.updateKeyVisual('ArrowDown', false);
+    });
+
+    // Momentary arpeggiator rate boost (Tab)
+    keyboardInput.onSpecialKey('arpBoostOn', () => {
+      if (this.arpBoostActive) return;
+      if (!this.arpeggiator.isEnabled()) return;
+      const state = this.arpeggiator.getState();
+      this.arpBoostBaseDivisor = state.clockDivisor || 4;
+      const boosted = Math.min(this.arpBoostBaseDivisor * 2, 8);
+      if (boosted !== state.clockDivisor) {
+        this.arpeggiator.setClockDivisor(boosted);
+        const sel = document.getElementById('arp-division') as HTMLSelectElement | null;
+        if (sel) sel.value = String(boosted);
+      }
+      this.arpBoostActive = true;
+    });
+    keyboardInput.onSpecialKey('arpBoostOff', () => {
       if (!this.arpBoostActive) return;
       const base = this.arpBoostBaseDivisor ?? this.arpeggiator.getState().clockDivisor;
       this.arpeggiator.setClockDivisor(base);
@@ -330,6 +441,20 @@ class MIDIController {
       } else {
         this.stopNote(note);
       }
+    });
+
+    // Input source selector
+    this.uiController.onInputSourceChange((sourceType) => {
+      this.handleInputSourceSwitch(sourceType as InputSourceType);
+    });
+
+    // Audio control sliders
+    this.uiController.onAudioThresholdChange((threshold) => {
+      this.inputManager.setAudioConfig({ amplitudeThreshold: threshold / 1000 });
+    });
+
+    this.uiController.onAudioSmoothingChange((smoothing) => {
+      this.inputManager.setAudioConfig({ smoothingWindow: smoothing });
     });
 
     // Unified control configurations
@@ -669,13 +794,16 @@ class MIDIController {
   private switchLayout(layoutName: string): void {
     // Stop all notes before switching
     this.stopAllNotes();
-    
+
     this.state.currentLayout = layoutName;
-    this.keyboardInput.setLayout(layoutName);
-    
+    const keyboardInput = this.inputManager.getKeyboardInput();
+    if (keyboardInput) {
+      keyboardInput.setLayout(layoutName);
+    }
+
     // Re-setup keyboard handlers for new layout
     this.setupKeyboardHandlers();
-    
+
     // Update UI
     this.updateUI();
   }
@@ -701,14 +829,17 @@ class MIDIController {
    * Recreates piano display and keyboard mapping for the current layout
    */
   private updateUI(): void {
-    const layout = this.keyboardInput.getLayout();
-    
+    const keyboardInput = this.inputManager.getKeyboardInput();
+    if (!keyboardInput) return;
+
+    const layout = keyboardInput.getLayout();
+
     // Ensure the layout select reflects the current state
     const layoutSelect = document.getElementById('layout-select') as HTMLSelectElement;
     if (layoutSelect && layoutSelect.value !== layout.name) {
       layoutSelect.value = layout.name;
     }
-    
+
     this.uiController.createPiano(layout, this.state.currentOctave);
     this.uiController.updateKeyboardMapping(layout);
     this.uiController.updateOctaveDisplay(this.state.currentOctave);
@@ -722,20 +853,20 @@ class MIDIController {
   cleanup(): void {
     // Stop all active notes
     this.stopAllNotes();
-    
+
     // Clean up MIDI engine
     this.midiEngine.cleanup();
-    
-    // Clean up keyboard input
-    this.keyboardInput.cleanup();
-    
+
+    // Clean up input manager (cleans up all input sources)
+    this.inputManager.cleanup();
+
     // Clean up arpeggiator
     this.arpeggiator.setEnabled(false);
     this.arpeggiator.clearStepCallbacks();
-    
+
     // Clean up clock sync callbacks
     this.clockSync.clearCallbacks();
-    
+
     // Clear local state
     this.state.activeNotes.clear();
     this.state.sustainedNotes.clear();
@@ -775,8 +906,8 @@ class MIDIController {
       this.arpeggiator.setMidiEngine(this.midiEngine);
       this.arpeggiator.reattachClockSync();
 
-      // Reattach keyboard listeners
-      this.keyboardInput.attach();
+      // Reattach input sources
+      await this.inputManager.resume();
 
       // Refresh UI
       this.updateUI();
@@ -846,7 +977,10 @@ class MIDIController {
     } catch {}
     // Clear any pressed key bookkeeping to avoid stuck keydown suppression
     try {
-      this.keyboardInput.resetPressedKeys();
+      const keyboardInput = this.inputManager.getKeyboardInput();
+      if (keyboardInput) {
+        keyboardInput.resetPressedKeys();
+      }
     } catch {
       // ignore
     }
@@ -878,6 +1012,63 @@ class MIDIController {
       this.midiEngine.selectBestClockInput();
       this.preferredClockInputId = 'auto';
       this.refreshClockInputs();
+    }
+  }
+
+  /**
+   * Switches to a different input source (keyboard, audio, etc.)
+   */
+  private async handleInputSourceSwitch(sourceType: InputSourceType): Promise<void> {
+    try {
+      // Stop all notes before switching
+      this.stopAllNotes();
+
+      await this.inputManager.switchInputSource(sourceType);
+
+      // Update UI to reflect new input source
+      const sourceName = this.inputManager.getActiveSource()?.getName() || sourceType;
+      this.uiController.updateStatus(`Switched to ${sourceName}`, 'success');
+
+      // Hide/show keyboard-specific controls based on input source
+      this.updateInputSourceUI(sourceType);
+    } catch (error) {
+      console.error('Failed to switch input source:', error);
+      this.uiController.updateStatus(`Failed to switch input: ${error}`, 'error');
+
+      // Fall back to keyboard if audio fails
+      if (sourceType === 'audio') {
+        await this.inputManager.switchInputSource('keyboard');
+        this.updateInputSourceUI('keyboard');
+      }
+    }
+  }
+
+  /**
+   * Updates UI elements based on active input source
+   */
+  private updateInputSourceUI(sourceType: InputSourceType): void {
+    // Show/hide octave controls (keyboard-specific)
+    const octaveControls = document.getElementById('octave-controls');
+    if (octaveControls) {
+      octaveControls.style.display = sourceType === 'keyboard' ? 'block' : 'none';
+    }
+
+    // Show/hide layout selector (keyboard-specific)
+    const layoutSelector = document.getElementById('layout-selector');
+    if (layoutSelector) {
+      layoutSelector.style.display = sourceType === 'keyboard' ? 'block' : 'none';
+    }
+
+    // Show/hide keyboard mapping (keyboard-specific)
+    const keyboardMapping = document.getElementById('keyboard-mapping');
+    if (keyboardMapping) {
+      keyboardMapping.style.display = sourceType === 'keyboard' ? 'block' : 'none';
+    }
+
+    // Show/hide audio controls (audio-specific)
+    const audioControls = document.getElementById('audio-controls');
+    if (audioControls) {
+      audioControls.style.display = sourceType === 'audio' ? 'block' : 'none';
     }
   }
 }
