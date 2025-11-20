@@ -4,7 +4,7 @@
  * Tests MIDI clock synchronization, BPM calculation, and timing events
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ClockSync } from '@/clock-sync';
 
 describe('ClockSync', () => {
