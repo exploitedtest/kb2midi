@@ -2,6 +2,24 @@
 
 A web-based MIDI controller that turns your QWERTY keyboard into a piano keyboard with real MIDI output for macOS and Windows.
 
+## Repository Structure
+
+This repository contains multiple projects:
+
+- **kb2midi** (root) - The main MIDI controller application (see below for details)
+- **game-prototype** (`packages/game-prototype/`) - An independent game prototype project
+
+To work with the game prototype:
+```bash
+npm run game:dev      # Start game dev server (http://localhost:8081)
+npm run game:build    # Build game for production
+npm run game:preview  # Preview game production build
+```
+
+See `packages/game-prototype/README.md` for more details about the game project.
+
+---
+
 ## Features
 
 - **Real MIDI Output**: Sends MIDI data to other software on your computer

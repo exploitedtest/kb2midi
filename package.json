@@ -4,7 +4,13 @@
   "description": "2.5 octave QWERTY keyboard MIDI controller",
   "main": "electron/main.cjs",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
+    "game:dev": "npm run dev --workspace=game-prototype",
+    "game:build": "npm run build --workspace=game-prototype",
+    "game:preview": "npm run preview --workspace=game-prototype",
     "start": "npm run build && vite preview",
     "dev": "vite",
     "dev:electron": "ELECTRON=1 vite",
