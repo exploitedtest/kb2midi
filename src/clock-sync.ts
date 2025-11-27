@@ -10,7 +10,7 @@ export class ClockSync {
     ticks: 0,
     bpm: 120,
     status: 'stopped',
-    lastTickTime: 0
+    lastTickTime: -1 // -1 sentinel so the first interval is measured on the second tick
   };
 
   private onTickCallbacks: (() => void)[] = [];
@@ -39,7 +39,7 @@ export class ClockSync {
       this.onStartCallbacks.forEach(callback => callback());
     }
 
-    if (this.state.lastTickTime > 0) {
+    if (this.state.lastTickTime >= 0) {
       const tickInterval = now - this.state.lastTickTime;
 
       // Filter out unrealistically fast intervals which indicate duplicate delivery
@@ -84,6 +84,8 @@ export class ClockSync {
     this.stopTimeout = setTimeout(() => {
       this.state.isRunning = false;
       this.state.status = 'stopped';
+      this.state.lastTickTime = -1;
+      this.tickIntervals = [];
       this.onStopCallbacks.forEach(callback => callback());
     }, this.STOP_TIMEOUT_MS);
   }
@@ -96,7 +98,7 @@ export class ClockSync {
     this.state.isRunning = true;
     this.state.ticks = 0;
     this.state.status = 'synced';
-    this.state.lastTickTime = 0;
+    this.state.lastTickTime = -1;
     this.tickIntervals = []; // Clear intervals on start
     
     this.onStartCallbacks.forEach(callback => callback());
@@ -109,6 +111,8 @@ export class ClockSync {
   onMIDIStop(): void {
     this.state.isRunning = false;
     this.state.status = 'stopped';
+    this.state.lastTickTime = -1;
+    this.tickIntervals = [];
     if (this.stopTimeout) {
       clearTimeout(this.stopTimeout);
       this.stopTimeout = null;
@@ -124,6 +128,8 @@ export class ClockSync {
   onMIDIContinue(): void {
     this.state.isRunning = true;
     this.state.status = 'synced';
+    this.state.lastTickTime = -1; // Ignore stale intervals after a pause
+    this.tickIntervals = [];
     if (this.stopTimeout) {
       clearTimeout(this.stopTimeout);
       this.stopTimeout = null;

@@ -106,10 +106,55 @@
                 <input type="range" id="arp-gate" min="0" max="100" value="50">
                 <span id="arp-gate-value">50%</span>
             </div>
-            <div class="control-group" style="display: none;"> <!-- Swing is not implemented yet -->
-                <label>Swing</label>
-                <input type="range" id="arp-swing" min="0" max="100" value="0">
-                <span id="arp-swing-value">0%</span>
+            <div class="control-group">
+                <label for="arp-timing-type">Timing Feel</label>
+                <select id="arp-timing-type">
+                    <option value="straight">Straight</option>
+                    <option value="swing">Swing</option>
+                    <option value="shuffle">Shuffle (Triplet)</option>
+                    <option value="dotted">Dotted</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="arp-humanize">
+                    Humanize
+                </label>
+            </div>
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="arp-humanize-velocity">
+                    Humanize Velocity
+                </label>
+            </div>
+            <div class="control-group">
+                <label for="arp-accent">Accent</label>
+                <select id="arp-accent">
+                    <option value="none">None</option>
+                    <option value="downbeats">Downbeats</option>
+                    <option value="offbeats">Offbeats</option>
+                    <option value="every-3rd">Every 3rd</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Probability</label>
+                <input type="range" id="arp-probability" min="0" max="100" value="100">
+                <span id="arp-probability-value">100%</span>
+            </div>
+            <div class="control-group">
+                <label for="arp-ratchet">Ratchet</label>
+                <select id="arp-ratchet">
+                    <option value="1">Off</option>
+                    <option value="2">2x</option>
+                    <option value="3">3x</option>
+                    <option value="4">4x</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="latch-mode">
+                    Latch Mode
+                </label>
             </div>
         </div>
     </div>
