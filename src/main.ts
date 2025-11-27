@@ -2,7 +2,16 @@ import { MIDIEngine } from './midi-engine';
 import { KeyboardInput } from './keyboard-input';
 import { UIController } from './ui-controller';
 import { ClockSync } from './clock-sync';
-import { Arpeggiator } from './arpeggiator';
+import {
+  Arpeggiator,
+  StraightTiming,
+  SwingTiming,
+  ShuffleTiming,
+  DottedTiming,
+  HumanizeTiming,
+  LayeredTiming,
+  VelocityHumanize
+} from './arpeggiator';
 import { ScaleFilter } from './scale-filter';
 import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
 
@@ -10,7 +19,7 @@ import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
 interface ControlConfig {
   id: string;
   setter: (value: string) => void;
-  type?: 'select' | 'range' | 'button';
+  type?: 'select' | 'range' | 'button' | 'checkbox';
   displayId?: string; // For range controls that show values
   displayFormatter?: (value: number) => string;
 }
@@ -36,7 +45,11 @@ class MIDIController {
   // Momentary arpeggiator rate boost state (Tab key)
   private arpBoostActive: boolean = false;
   private arpBoostBaseDivisor: number | null = null;
-  
+  // Timing strategy state
+  private currentTimingType: 'straight' | 'swing' | 'shuffle' | 'dotted' = 'straight';
+  private humanizeEnabled: boolean = false;
+  private timingSeed: number = Math.random() * 1000000;
+
   private state: ControllerState = {
     currentOctave: 4,
     velocity: 80,
@@ -390,17 +403,71 @@ class MIDIController {
         displayId: 'arp-gate-value',
         displayFormatter: (value) => `${value}%`
       },
-      
-      // Arpeggiator swing
+
+      // Arpeggiator timing type
       {
-        id: 'arp-swing',
+        id: 'arp-timing-type',
+        setter: (value) => {
+          this.updateTimingType(value as 'straight' | 'swing' | 'shuffle' | 'dotted');
+        },
+        type: 'select'
+      },
+
+      // Humanize toggle
+      {
+        id: 'arp-humanize',
+        setter: (value) => {
+          this.updateHumanizeState(value === 'true');
+        },
+        type: 'checkbox'
+      },
+
+      // Velocity humanize toggle
+      {
+        id: 'arp-humanize-velocity',
+        setter: (value) => {
+          this.updateVelocityHumanizeState(value === 'true');
+        },
+        type: 'checkbox'
+      },
+
+      // Accent pattern
+      {
+        id: 'arp-accent',
+        setter: (value) => {
+          this.updateAccentPattern(value as 'none' | 'downbeats' | 'offbeats' | 'every-3rd');
+        },
+        type: 'select'
+      },
+
+      // Gate probability
+      {
+        id: 'arp-probability',
         setter: (value) => {
           const numValue = parseInt(value);
-          this.arpeggiator.setSwing(numValue / 100);
+          this.updateGateProbability(numValue / 100);
         },
         type: 'range',
-        displayId: 'arp-swing-value',
+        displayId: 'arp-probability-value',
         displayFormatter: (value) => `${value}%`
+      },
+
+      // Ratchet count
+      {
+        id: 'arp-ratchet',
+        setter: (value) => {
+          this.updateRatchetCount(parseInt(value));
+        },
+        type: 'select'
+      },
+
+      // Latch mode
+      {
+        id: 'latch-mode',
+        setter: (value) => {
+          this.keyboardInput.setLatchMode(value === 'true');
+        },
+        type: 'checkbox'
       },
 
       // Scale filter toggle
@@ -465,16 +532,20 @@ class MIDIController {
       // Wire the main control event
       element.addEventListener(eventType, () => {
         let value: string;
-        
+
         // For buttons, don't try to get a value - just call the setter
         if (config.type === 'button') {
           value = '';
+          config.setter(value);
+        } else if (config.type === 'checkbox') {
+          // Checkboxes use checked property
+          value = (element as HTMLInputElement).checked ? 'true' : 'false';
           config.setter(value);
         } else {
           value = (element as HTMLInputElement | HTMLSelectElement).value;
           config.setter(value);
         }
-        
+
         // Update display if configured
         if (config.displayId && config.displayFormatter) {
           const displayElement = document.getElementById(config.displayId);
@@ -485,6 +556,95 @@ class MIDIController {
         }
       });
     });
+  }
+
+  /**
+   * Updates the timing type and applies the new timing strategy
+   */
+  private updateTimingType(type: 'straight' | 'swing' | 'shuffle' | 'dotted'): void {
+    this.currentTimingType = type;
+    this.applyTimingStrategy();
+  }
+
+  /**
+   * Updates the humanize state and applies the new timing strategy
+   */
+  private updateHumanizeState(enabled: boolean): void {
+    this.humanizeEnabled = enabled;
+    if (enabled) {
+      // Generate new seed when enabling humanize for variety
+      this.timingSeed = Math.random() * 1000000;
+    }
+    this.applyTimingStrategy();
+  }
+
+  /**
+   * Applies the current timing strategy to the arpeggiator
+   * Combines base timing (swing/shuffle/dotted) with optional humanization
+   */
+  private applyTimingStrategy(): void {
+    // Create base timing strategy based on type
+    let baseStrategy;
+    switch (this.currentTimingType) {
+      case 'swing':
+        baseStrategy = new SwingTiming(1.0); // Full swing amount
+        break;
+      case 'shuffle':
+        baseStrategy = new ShuffleTiming(1.0); // Full shuffle amount
+        break;
+      case 'dotted':
+        baseStrategy = new DottedTiming(1.0); // Full dotted amount
+        break;
+      case 'straight':
+      default:
+        baseStrategy = new StraightTiming();
+        break;
+    }
+
+    // Layer humanization if enabled
+    if (this.humanizeEnabled) {
+      const humanizeStrategy = new HumanizeTiming(0.4, this.timingSeed); // 40% humanize amount
+      const layered = new LayeredTiming([baseStrategy, humanizeStrategy]);
+      this.arpeggiator.setTimingStrategy(layered);
+    } else {
+      this.arpeggiator.setTimingStrategy(baseStrategy);
+    }
+  }
+
+  /**
+   * Updates the velocity humanize state
+   * Applies random ±10 velocity variation to arpeggiator notes
+   */
+  private updateVelocityHumanizeState(enabled: boolean): void {
+    if (enabled) {
+      this.arpeggiator.setVelocityHumanize(new VelocityHumanize(1.0, this.timingSeed));
+    } else {
+      this.arpeggiator.setVelocityHumanize(null);
+    }
+  }
+
+  /**
+   * Updates the accent pattern for velocity emphasis
+   * Emphasizes certain beats based on the selected pattern
+   */
+  private updateAccentPattern(type: 'none' | 'downbeats' | 'offbeats' | 'every-3rd'): void {
+    this.arpeggiator.setAccentPattern(type);
+  }
+
+  /**
+   * Updates the gate probability (note skip chance)
+   * Lower values create more generative/sparse patterns
+   */
+  private updateGateProbability(chance: number): void {
+    this.arpeggiator.setGateProbability(chance);
+  }
+
+  /**
+   * Updates the ratchet count (note repeat subdivision)
+   * Values > 1 create rapid note repeats within each step
+   */
+  private updateRatchetCount(count: number): void {
+    this.arpeggiator.setRatchetCount(count);
   }
 
   /**

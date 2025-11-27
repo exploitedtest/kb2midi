@@ -95,6 +95,11 @@ export class MIDIEngine {
    * @param event - The MIDI connection event from the Web MIDI API
    */
   private handleMIDIStateChange(event: WebMidi.MIDIConnectionEvent): void {
+    // Some environments (and our tests) may emit a bare statechange event with no port info
+    if (!event || !event.port) {
+      return;
+    }
+
     console.log(`MIDI device ${event.port.name} ${event.port.state}`);
     
     if (event.port.type === 'output') {
