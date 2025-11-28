@@ -116,6 +116,19 @@ export class KeyboardInput {
   }
 
   /**
+   * Detaches keyboard event listeners without clearing handlers
+   * Useful when temporarily disabling QWERTY control (e.g., external MIDI mode)
+   */
+  detach(): void {
+    if (!this.attached) return;
+    document.removeEventListener('keydown', this.boundKeyDown, { capture: true });
+    document.removeEventListener('keyup', this.boundKeyUp);
+    document.removeEventListener('contextmenu', this.boundContextMenu);
+    this.pressedKeys.clear();
+    this.attached = false;
+  }
+
+  /**
    * Handles keydown events and triggers appropriate note on handlers
    * Filters out modifier keys, repeated events, and input field events
    * @param event - The keyboard event
@@ -401,9 +414,7 @@ export class KeyboardInput {
    */
   cleanup(): void {
     // Remove all event listeners
-    document.removeEventListener('keydown', this.boundKeyDown, { capture: true });
-    document.removeEventListener('keyup', this.boundKeyUp);
-    document.removeEventListener('contextmenu', this.boundContextMenu);
+    this.detach();
     
     // Clear all handler maps
     this.keyDownHandlers.clear();

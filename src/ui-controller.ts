@@ -25,6 +25,7 @@ export class UIController {
   private layoutSelect: HTMLSelectElement;
   private clockStatusElement: HTMLElement;
   private midiClockInputSelect: HTMLSelectElement | null = null;
+  private midiNoteInputSelect: HTMLSelectElement | null = null;
   private beatIndicatorTimeout?: ReturnType<typeof setTimeout>; // Store timeout to prevent overlapping pulses
   private modIndicator: HTMLElement | null = null;
   private pitchIndicator: HTMLElement | null = null;
@@ -59,6 +60,7 @@ export class UIController {
     this.layoutSelect = document.getElementById('layout-select') as HTMLSelectElement;
     this.clockStatusElement = document.getElementById('clock-status')!;
     this.midiClockInputSelect = document.getElementById('midi-clock-input') as HTMLSelectElement | null;
+    this.midiNoteInputSelect = document.getElementById('midi-note-input') as HTMLSelectElement | null;
     this.modIndicator = document.getElementById('mod-indicator');
     this.pitchIndicator = document.getElementById('pitch-indicator');
     this.octaveDownIndicator = document.getElementById('octave-down-indicator');
@@ -878,13 +880,9 @@ export class UIController {
       select.appendChild(opt);
     });
 
-    // Set selection
-    const values = ['auto', ...inputs.map(i => i.id)];
-    if (values.includes(selected)) {
-      select.value = selected;
-    } else {
-      select.value = 'auto';
-    }
+    // Validate that selected value exists in options before setting
+    const validIds = ['auto', ...inputs.map(i => i.id)];
+    select.value = validIds.includes(selected) ? selected : 'auto';
   }
 
   /**
@@ -894,6 +892,41 @@ export class UIController {
     if (!this.midiClockInputSelect) return;
     this.midiClockInputSelect.addEventListener('change', () => {
       handler(this.midiClockInputSelect!.value);
+    });
+  }
+
+  /**
+   * Populate the MIDI Note Input dropdown
+   */
+  populateNoteInputs(sources: { id: string; name: string }[], selected: string = 'keyboard'): void {
+    if (!this.midiNoteInputSelect) return;
+    const select = this.midiNoteInputSelect;
+    select.innerHTML = '';
+
+    sources.forEach(src => {
+      const opt = document.createElement('option');
+      opt.value = src.id;
+      opt.textContent = src.name;
+      select.appendChild(opt);
+    });
+
+    // Validate that selected value exists in options before setting
+    const validIds = sources.map(s => s.id);
+    if (validIds.includes(selected)) {
+      select.value = selected;
+    } else {
+      // Fall back to first option if selected value is invalid
+      select.value = sources[0]?.id || 'keyboard';
+    }
+  }
+
+  /**
+   * Listen for note input selection changes
+   */
+  onNoteInputChange(handler: (sourceId: string) => void): void {
+    if (!this.midiNoteInputSelect) return;
+    this.midiNoteInputSelect.addEventListener('change', () => {
+      handler(this.midiNoteInputSelect!.value);
     });
   }
 

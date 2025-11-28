@@ -20,6 +20,7 @@ export class MIDIEngine {
     midiAccess: null,
     midiOutput: null,
     midiInput: null,
+    midiNoteInput: null,
     isConnected: false
   };
 
@@ -27,11 +28,13 @@ export class MIDIEngine {
   private sustainedNotes = new Set<number>();
   private sustainPedalActive = false;
   private clockSync: ClockSync;
-  
+
   private onStateChange?: (connected: boolean) => void;
   private onError?: (error: Error) => void;
   private onClockSyncChange?: (status: 'synced' | 'free' | 'stopped') => void;
   private onPortsChange?: () => void;
+  private onExternalNoteOn?: (note: number, velocity: number, channel: number) => void;
+  private onExternalNoteOff?: (note: number, velocity: number, channel: number) => void;
   
   // Pre-validation cache for performance
   private validChannels = new Set<number>();
@@ -42,6 +45,7 @@ export class MIDIEngine {
     this.clockSync = clockSync;
     this.handleMIDIStateChange = this.handleMIDIStateChange.bind(this);
     this.handleMIDIMessage = this.handleMIDIMessage.bind(this);
+    this.handleNoteInputMessage = this.handleNoteInputMessage.bind(this);
     this.initializeValidationCache();
   }
 
@@ -101,7 +105,7 @@ export class MIDIEngine {
     }
 
     console.log(`MIDI device ${event.port.name} ${event.port.state}`);
-    
+
     if (event.port.type === 'output') {
       if (event.port.state === 'disconnected' && event.port.id === this.state.midiOutput?.id) {
         this.state.isConnected = false;
@@ -114,12 +118,17 @@ export class MIDIEngine {
     }
 
     if (event.port.type === 'input') {
-      // If our current input disappeared, pick a new best input
+      // If our current clock input disappeared, remove handler and pick a new best input
       if (event.port.state === 'disconnected' && event.port.id === this.state.midiInput?.id) {
-        this.state.midiInput.onmidimessage = null;
+        this.state.midiInput.removeEventListener('midimessage', this.handleMIDIMessage as any);
         this.state.midiInput = null;
         // Reselect best available input
         this.setupMIDIInput();
+      }
+      // If our current note input disappeared, remove handler and clear reference
+      if (event.port.state === 'disconnected' && event.port.id === this.state.midiNoteInput?.id) {
+        this.state.midiNoteInput.removeEventListener('midimessage', this.handleNoteInputMessage as any);
+        this.state.midiNoteInput = null;
       }
     }
 
@@ -163,27 +172,56 @@ export class MIDIEngine {
 
     // If switching inputs, detach listener from previous one first to avoid duplicate ticks
     if (this.state.midiInput && this.state.midiInput !== chosen) {
-      try { this.state.midiInput.onmidimessage = null; } catch {}
+      try {
+        this.state.midiInput.removeEventListener('midimessage', this.handleMIDIMessage as any);
+      } catch {}
     }
 
     this.state.midiInput = chosen;
-    // Reassign handler idempotently (safe even if same input)
-    this.state.midiInput.onmidimessage = this.handleMIDIMessage;
+    // Add event listener (allows multiple handlers if same device used for clock and notes)
+    this.state.midiInput.addEventListener('midimessage', this.handleMIDIMessage as any);
 
     console.log(`MIDI Input connected: ${this.state.midiInput.name || 'Unknown'}`);
     return true;
   }
 
   /**
-   * Allows manual selection of MIDI input (e.g., from UI)
+   * Allows manual selection of MIDI clock input (e.g., from UI)
    */
   setInput(input: WebMidi.MIDIInput): void {
     if (this.state.midiInput && this.state.midiInput !== input) {
-      this.state.midiInput.onmidimessage = null;
+      this.state.midiInput.removeEventListener('midimessage', this.handleMIDIMessage as any);
     }
     this.state.midiInput = input;
-    this.state.midiInput.onmidimessage = this.handleMIDIMessage;
-    console.log(`Switched MIDI Input to: ${input.name || 'Unknown'}`);
+    this.state.midiInput.addEventListener('midimessage', this.handleMIDIMessage as any);
+    console.log(`Switched MIDI Clock Input to: ${input.name || 'Unknown'}`);
+  }
+
+  /**
+   * Allows manual selection of MIDI note input device
+   * @param input - The MIDI input to use for note messages, or null to disable external input
+   */
+  setNoteInput(input: WebMidi.MIDIInput | null): void {
+    // Clean up previous note input
+    if (this.state.midiNoteInput) {
+      this.state.midiNoteInput.removeEventListener('midimessage', this.handleNoteInputMessage as any);
+    }
+
+    this.state.midiNoteInput = input;
+
+    if (input) {
+      this.state.midiNoteInput!.addEventListener('midimessage', this.handleNoteInputMessage as any);
+      console.log(`Switched MIDI Note Input to: ${input.name || 'Unknown'}`);
+    } else {
+      console.log('MIDI Note Input disabled (using QWERTY keyboard)');
+    }
+  }
+
+  /**
+   * Gets the currently selected note input device
+   */
+  getNoteInput(): WebMidi.MIDIInput | null {
+    return this.state.midiNoteInput;
   }
 
   /**
@@ -210,31 +248,45 @@ export class MIDIEngine {
   }
 
   /**
+   * Subscribe to external MIDI note on events
+   */
+  onExternalNoteOnHandler(callback: (note: number, velocity: number, channel: number) => void): void {
+    this.onExternalNoteOn = callback;
+  }
+
+  /**
+   * Subscribe to external MIDI note off events
+   */
+  onExternalNoteOffHandler(callback: (note: number, velocity: number, channel: number) => void): void {
+    this.onExternalNoteOff = callback;
+  }
+
+  /**
    * Handles incoming MIDI messages for clock sync
    * @param event - The MIDI message event
    */
   private handleMIDIMessage(event: WebMidi.MIDIMessageEvent): void {
     try {
       const [status] = event.data;
-      
+
       // MIDI Clock (0xF8)
       if (status === 0xF8) {
         // Use high-resolution monotonic clock inside ClockSync
         this.clockSync.onMIDIClockTick();
       }
-      
+
       // MIDI Start (0xFA)
       if (status === 0xFA) {
         this.clockSync.onMIDIStart();
         this.onClockSyncChange?.('synced');
       }
-      
+
       // MIDI Continue (0xFB)
       if (status === 0xFB) {
         this.clockSync.onMIDIContinue();
         this.onClockSyncChange?.('synced');
       }
-      
+
       // MIDI Stop (0xFC)
       if (status === 0xFC) {
         this.clockSync.onMIDIStop();
@@ -242,6 +294,47 @@ export class MIDIEngine {
       }
     } catch (error) {
       console.error('Error handling MIDI message:', error);
+    }
+  }
+
+  /**
+   * Handles incoming MIDI note messages from external devices
+   * @param event - The MIDI message event
+   */
+  private handleNoteInputMessage(event: WebMidi.MIDIMessageEvent): void {
+    try {
+      const [status, data1, data2] = event.data;
+
+      // Validate that we have all required data bytes
+      if (status === undefined || data1 === undefined || data2 === undefined) {
+        console.warn('Incomplete MIDI message received:', event.data);
+        return;
+      }
+
+      const messageType = status & 0xF0;
+      const channel = (status & 0x0F) + 1; // Convert 0-15 to 1-16
+
+      // MIDI Note On (0x90)
+      if (messageType === MIDI_NOTE_ON) {
+        const note = data1;
+        const velocity = data2;
+
+        // Velocity 0 is treated as note off
+        if (velocity === 0) {
+          this.onExternalNoteOff?.(note, velocity, channel);
+        } else {
+          this.onExternalNoteOn?.(note, velocity, channel);
+        }
+      }
+
+      // MIDI Note Off (0x80)
+      if (messageType === MIDI_NOTE_OFF) {
+        const note = data1;
+        const velocity = data2;
+        this.onExternalNoteOff?.(note, velocity, channel);
+      }
+    } catch (error) {
+      console.error('Error handling MIDI note input message:', error);
     }
   }
 
@@ -543,9 +636,13 @@ export class MIDIEngine {
       this.state.midiAccess.onstatechange = null;
     }
 
-    // Remove input message listener
+    // Remove input message listeners
     if (this.state.midiInput) {
-      this.state.midiInput.onmidimessage = null;
+      this.state.midiInput.removeEventListener('midimessage', this.handleMIDIMessage as any);
+    }
+
+    if (this.state.midiNoteInput) {
+      this.state.midiNoteInput.removeEventListener('midimessage', this.handleNoteInputMessage as any);
     }
 
     // Clear all active notes
@@ -556,12 +653,15 @@ export class MIDIEngine {
     this.state.midiAccess = null;
     this.state.midiOutput = null;
     this.state.midiInput = null;
+    this.state.midiNoteInput = null;
     this.state.isConnected = false;
 
     // Clear callbacks
     this.onStateChange = undefined;
     this.onError = undefined;
     this.onClockSyncChange = undefined;
+    this.onExternalNoteOn = undefined;
+    this.onExternalNoteOff = undefined;
   }
 
   /**
