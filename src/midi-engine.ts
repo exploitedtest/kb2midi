@@ -297,6 +297,13 @@ export class MIDIEngine {
   private handleNoteInputMessage(event: WebMidi.MIDIMessageEvent): void {
     try {
       const [status, data1, data2] = event.data;
+
+      // Validate that we have all required data bytes
+      if (status === undefined || data1 === undefined || data2 === undefined) {
+        console.warn('Incomplete MIDI message received:', event.data);
+        return;
+      }
+
       const messageType = status & 0xF0;
       const channel = (status & 0x0F) + 1; // Convert 0-15 to 1-16
 
