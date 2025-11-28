@@ -880,13 +880,9 @@ export class UIController {
       select.appendChild(opt);
     });
 
-    // Set selection
-    const values = ['auto', ...inputs.map(i => i.id)];
-    if (values.includes(selected)) {
-      select.value = selected;
-    } else {
-      select.value = 'auto';
-    }
+    // Validate that selected value exists in options before setting
+    const validIds = ['auto', ...inputs.map(i => i.id)];
+    select.value = validIds.includes(selected) ? selected : 'auto';
   }
 
   /**
@@ -914,8 +910,14 @@ export class UIController {
       select.appendChild(opt);
     });
 
-    // Select the current input
-    select.value = selected;
+    // Validate that selected value exists in options before setting
+    const validIds = sources.map(s => s.id);
+    if (validIds.includes(selected)) {
+      select.value = selected;
+    } else {
+      // Fall back to first option if selected value is invalid
+      select.value = sources[0]?.id || 'keyboard';
+    }
   }
 
   /**
