@@ -76,6 +76,12 @@ body {
     box-shadow: 0 0 10px rgba(244, 67, 54, 0.3);
 }
 
+.clock-status.disabled {
+    background: rgba(158, 158, 158, 0.25);
+    border-color: #9e9e9e;
+    box-shadow: 0 0 10px rgba(158, 158, 158, 0.25);
+}
+
 .arpeggiator-controls {
     display: flex;
     gap: 15px;

@@ -89,9 +89,21 @@ export class ClockSync {
       this.stopTimeout = null;
     }
 
+    // Reset timing accumulators so we don't mix intervals between sources
+    this.state.ticks = 0;
+    this.state.lastTickTime = 0;
+    this.tickIntervals = [];
+    // Default BPM to internal setting when switching to internal, otherwise unknown until next external tick
+    this.state.bpm = source === 'internal' ? this.masterClock.getBPM() : 0;
+
     this.state.source = source;
     this.state.isRunning = false;
     this.state.status = 'stopped';
+
+    // Fire stop callbacks if we were running before the switch
+    if (wasRunning) {
+      this.onStopCallbacks.forEach(callback => callback());
+    }
 
     // If switching to internal and was running, start master clock
     if (source === 'internal' && wasRunning) {
@@ -225,12 +237,17 @@ export class ClockSync {
     if (this.state.source !== 'external') {
       return;
     }
+    // Clear any existing stop timeout to prevent interference
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+      this.stopTimeout = null;
+    }
     this.state.isRunning = true;
     this.state.ticks = 0;
     this.state.status = 'synced';
     this.state.lastTickTime = -1;
     this.tickIntervals = []; // Clear intervals on start
-    
+
     this.onStartCallbacks.forEach(callback => callback());
   }
 
