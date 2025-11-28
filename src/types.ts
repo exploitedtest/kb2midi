@@ -3,7 +3,8 @@
 export interface MIDIState {
   midiAccess: WebMidi.MIDIAccess | null;
   midiOutput: WebMidi.MIDIOutput | null;
-  midiInput: WebMidi.MIDIInput | null;
+  midiInput: WebMidi.MIDIInput | null; // For clock sync
+  midiNoteInput: WebMidi.MIDIInput | null; // For external MIDI note input
   isConnected: boolean;
 }
 
@@ -26,6 +27,8 @@ export interface ActiveNote {
   channel: number;
 }
 
+export type NoteInputSource = 'keyboard' | 'external';
+
 export interface ControllerState {
   currentOctave: number;
   velocity: number;
@@ -35,6 +38,7 @@ export interface ControllerState {
   sustainPedalActive: boolean;
   sustainedNotes: Set<number>;
   currentLayout: string;
+  noteInputSource: NoteInputSource; // 'keyboard' or 'external'
 }
 
 export interface VelocityCurve {

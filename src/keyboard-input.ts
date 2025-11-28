@@ -13,7 +13,9 @@ export class KeyboardInput {
   private currentLayout: KeyboardLayout;
   private layouts = new Map<string, KeyboardLayout>();
   private currentVelocity: number = 80;
-  
+  private latchMode: boolean = false; // Latch mode: notes stay active until re-pressed
+  private latchedKeys = new Set<string>(); // Track latched note keys
+
   // Store bound handlers for cleanup
   private boundKeyDown: (event: KeyboardEvent) => void;
   private boundKeyUp: (event: KeyboardEvent) => void;
@@ -114,6 +116,19 @@ export class KeyboardInput {
   }
 
   /**
+   * Detaches keyboard event listeners without clearing handlers
+   * Useful when temporarily disabling QWERTY control (e.g., external MIDI mode)
+   */
+  detach(): void {
+    if (!this.attached) return;
+    document.removeEventListener('keydown', this.boundKeyDown, { capture: true });
+    document.removeEventListener('keyup', this.boundKeyUp);
+    document.removeEventListener('contextmenu', this.boundContextMenu);
+    this.pressedKeys.clear();
+    this.attached = false;
+  }
+
+  /**
    * Handles keydown events and triggers appropriate note on handlers
    * Filters out modifier keys, repeated events, and input field events
    * @param event - The keyboard event
@@ -150,8 +165,24 @@ export class KeyboardInput {
     const noteOffset = this.currentLayout.keys[event.code];
     if (noteOffset !== undefined) {
       event.preventDefault();
-      const velocity = this.getVelocityFromEvent(event);
-      this.keyDownHandlers.get(event.code)?.(velocity);
+
+      // Latch mode: toggle behavior
+      if (this.latchMode) {
+        if (this.latchedKeys.has(event.code)) {
+          // Key is already latched, unlatch it (turn off)
+          this.latchedKeys.delete(event.code);
+          this.keyUpHandlers.get(event.code)?.();
+        } else {
+          // Key is not latched, latch it (turn on)
+          this.latchedKeys.add(event.code);
+          const velocity = this.getVelocityFromEvent(event);
+          this.keyDownHandlers.get(event.code)?.(velocity);
+        }
+      } else {
+        // Normal mode: trigger note on
+        const velocity = this.getVelocityFromEvent(event);
+        this.keyDownHandlers.get(event.code)?.(velocity);
+      }
     }
 
     // Check for octave control keys
@@ -186,7 +217,11 @@ export class KeyboardInput {
     // Check for note keys
     if (this.currentLayout.keys[event.code] !== undefined) {
       event.preventDefault();
-      this.keyUpHandlers.get(event.code)?.();
+      // In latch mode, key release doesn't trigger note off
+      // (notes are toggled on key press instead)
+      if (!this.latchMode) {
+        this.keyUpHandlers.get(event.code)?.();
+      }
     }
 
     // Check for sustain pedal
@@ -315,6 +350,28 @@ export class KeyboardInput {
   }
 
   /**
+   * Sets latch mode (toggle mode for notes)
+   * @param enabled - If true, notes toggle on/off on key press; if false, normal behavior
+   */
+  setLatchMode(enabled: boolean): void {
+    this.latchMode = enabled;
+    // When disabling latch mode, clear all latched keys
+    if (!enabled) {
+      this.latchedKeys.forEach(keyCode => {
+        this.keyUpHandlers.get(keyCode)?.();
+      });
+      this.latchedKeys.clear();
+    }
+  }
+
+  /**
+   * Gets current latch mode state
+   */
+  getLatchMode(): boolean {
+    return this.latchMode;
+  }
+
+  /**
    * Registers the spacebar as the sustain pedal
    * Maps spacebar to sustain on/off handlers
    */
@@ -357,9 +414,7 @@ export class KeyboardInput {
    */
   cleanup(): void {
     // Remove all event listeners
-    document.removeEventListener('keydown', this.boundKeyDown, { capture: true });
-    document.removeEventListener('keyup', this.boundKeyUp);
-    document.removeEventListener('contextmenu', this.boundContextMenu);
+    this.detach();
     
     // Clear all handler maps
     this.keyDownHandlers.clear();
