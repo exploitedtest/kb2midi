@@ -2,14 +2,24 @@ import { MIDIEngine } from './midi-engine';
 import { KeyboardInput } from './keyboard-input';
 import { UIController } from './ui-controller';
 import { ClockSync } from './clock-sync';
-import { Arpeggiator } from './arpeggiator';
+import {
+  Arpeggiator,
+  StraightTiming,
+  SwingTiming,
+  ShuffleTiming,
+  DottedTiming,
+  HumanizeTiming,
+  LayeredTiming,
+  VelocityHumanize
+} from './arpeggiator';
+import { ScaleFilter } from './scale-filter';
 import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
 
 // Enhanced control configuration with better type safety
 interface ControlConfig {
   id: string;
   setter: (value: string) => void;
-  type?: 'select' | 'range' | 'button';
+  type?: 'select' | 'range' | 'button' | 'checkbox';
   displayId?: string; // For range controls that show values
   displayFormatter?: (value: number) => string;
 }
@@ -25,6 +35,7 @@ class MIDIController {
   private uiController: UIController;
   private clockSync: ClockSync;
   private arpeggiator: Arpeggiator;
+  private scaleFilter: ScaleFilter;
   private isActive = false;
   // Tracks whether the app is in its initial async initialization
   private initializing = true;
@@ -34,7 +45,11 @@ class MIDIController {
   // Momentary arpeggiator rate boost state (Tab key)
   private arpBoostActive: boolean = false;
   private arpBoostBaseDivisor: number | null = null;
-  
+  // Timing strategy state
+  private currentTimingType: 'straight' | 'swing' | 'shuffle' | 'dotted' = 'straight';
+  private humanizeEnabled: boolean = false;
+  private timingSeed: number = Math.random() * 1000000;
+
   private state: ControllerState = {
     currentOctave: 4,
     velocity: 80,
@@ -53,7 +68,8 @@ class MIDIController {
     this.keyboardInput = new KeyboardInput();
     this.uiController = new UIController();
     this.arpeggiator = new Arpeggiator(this.clockSync);
-    
+    this.scaleFilter = new ScaleFilter();
+
     this.initialize();
   }
 
@@ -98,12 +114,15 @@ class MIDIController {
 
     // Set up arpeggiator
     this.setupArpeggiator();
-
+    
     // Set up keyboard input handlers
     this.setupKeyboardHandlers();
     
     // Set up UI handlers
     this.setupUIHandlers();
+
+    // Sync scale filter defaults with current UI selections
+    this.syncScaleFilterFromUI();
     
     // Wire up velocity changes to keyboard input
     this.uiController.onVelocityChange((velocity) => {
@@ -429,17 +448,107 @@ class MIDIController {
         displayId: 'arp-gate-value',
         displayFormatter: (value) => `${value}%`
       },
-      
-      // Arpeggiator swing
+
+      // Arpeggiator timing type
       {
-        id: 'arp-swing',
+        id: 'arp-timing-type',
+        setter: (value) => {
+          this.updateTimingType(value as 'straight' | 'swing' | 'shuffle' | 'dotted');
+        },
+        type: 'select'
+      },
+
+      // Humanize toggle
+      {
+        id: 'arp-humanize',
+        setter: (value) => {
+          this.updateHumanizeState(value === 'true');
+        },
+        type: 'checkbox'
+      },
+
+      // Velocity humanize toggle
+      {
+        id: 'arp-humanize-velocity',
+        setter: (value) => {
+          this.updateVelocityHumanizeState(value === 'true');
+        },
+        type: 'checkbox'
+      },
+
+      // Accent pattern
+      {
+        id: 'arp-accent',
+        setter: (value) => {
+          this.updateAccentPattern(value as 'none' | 'downbeats' | 'offbeats' | 'every-3rd');
+        },
+        type: 'select'
+      },
+
+      // Gate probability
+      {
+        id: 'arp-probability',
         setter: (value) => {
           const numValue = parseInt(value);
-          this.arpeggiator.setSwing(numValue / 100);
+          this.updateGateProbability(numValue / 100);
         },
         type: 'range',
-        displayId: 'arp-swing-value',
+        displayId: 'arp-probability-value',
         displayFormatter: (value) => `${value}%`
+      },
+
+      // Ratchet count
+      {
+        id: 'arp-ratchet',
+        setter: (value) => {
+          this.updateRatchetCount(parseInt(value));
+        },
+        type: 'select'
+      },
+
+      // Latch mode
+      {
+        id: 'latch-mode',
+        setter: (value) => {
+          this.keyboardInput.setLatchMode(value === 'true');
+        },
+        type: 'checkbox'
+      },
+
+      // Scale filter toggle
+      {
+        id: 'scale-filter-toggle',
+        setter: () => {
+          this.toggleScaleFilter();
+          this.updateScaleFilterButtonText();
+
+          // Show/hide scale filter controls
+          const scaleControls = document.getElementById('scale-filter-controls');
+          if (scaleControls) {
+            scaleControls.style.display = this.scaleFilter.isEnabled() ? 'block' : 'none';
+          }
+        },
+        type: 'button'
+      },
+
+      // Scale root note
+      {
+        id: 'scale-root',
+        setter: (value) => {
+          this.scaleFilter.setRootNote(parseInt(value));
+          this.updateUI(); // Update piano highlighting
+        },
+        type: 'select'
+      },
+
+      // Scale type
+      {
+        id: 'scale-type',
+        setter: (value) => {
+          this.scaleFilter.setScaleType(value);
+          this.updateUI(); // Update piano highlighting
+        },
+        type: 'select'
       }
     ];
 
@@ -468,16 +577,20 @@ class MIDIController {
       // Wire the main control event
       element.addEventListener(eventType, () => {
         let value: string;
-        
+
         // For buttons, don't try to get a value - just call the setter
         if (config.type === 'button') {
           value = '';
+          config.setter(value);
+        } else if (config.type === 'checkbox') {
+          // Checkboxes use checked property
+          value = (element as HTMLInputElement).checked ? 'true' : 'false';
           config.setter(value);
         } else {
           value = (element as HTMLInputElement | HTMLSelectElement).value;
           config.setter(value);
         }
-        
+
         // Update display if configured
         if (config.displayId && config.displayFormatter) {
           const displayElement = document.getElementById(config.displayId);
@@ -488,6 +601,95 @@ class MIDIController {
         }
       });
     });
+  }
+
+  /**
+   * Updates the timing type and applies the new timing strategy
+   */
+  private updateTimingType(type: 'straight' | 'swing' | 'shuffle' | 'dotted'): void {
+    this.currentTimingType = type;
+    this.applyTimingStrategy();
+  }
+
+  /**
+   * Updates the humanize state and applies the new timing strategy
+   */
+  private updateHumanizeState(enabled: boolean): void {
+    this.humanizeEnabled = enabled;
+    if (enabled) {
+      // Generate new seed when enabling humanize for variety
+      this.timingSeed = Math.random() * 1000000;
+    }
+    this.applyTimingStrategy();
+  }
+
+  /**
+   * Applies the current timing strategy to the arpeggiator
+   * Combines base timing (swing/shuffle/dotted) with optional humanization
+   */
+  private applyTimingStrategy(): void {
+    // Create base timing strategy based on type
+    let baseStrategy;
+    switch (this.currentTimingType) {
+      case 'swing':
+        baseStrategy = new SwingTiming(1.0); // Full swing amount
+        break;
+      case 'shuffle':
+        baseStrategy = new ShuffleTiming(1.0); // Full shuffle amount
+        break;
+      case 'dotted':
+        baseStrategy = new DottedTiming(1.0); // Full dotted amount
+        break;
+      case 'straight':
+      default:
+        baseStrategy = new StraightTiming();
+        break;
+    }
+
+    // Layer humanization if enabled
+    if (this.humanizeEnabled) {
+      const humanizeStrategy = new HumanizeTiming(0.4, this.timingSeed); // 40% humanize amount
+      const layered = new LayeredTiming([baseStrategy, humanizeStrategy]);
+      this.arpeggiator.setTimingStrategy(layered);
+    } else {
+      this.arpeggiator.setTimingStrategy(baseStrategy);
+    }
+  }
+
+  /**
+   * Updates the velocity humanize state
+   * Applies random ±10 velocity variation to arpeggiator notes
+   */
+  private updateVelocityHumanizeState(enabled: boolean): void {
+    if (enabled) {
+      this.arpeggiator.setVelocityHumanize(new VelocityHumanize(1.0, this.timingSeed));
+    } else {
+      this.arpeggiator.setVelocityHumanize(null);
+    }
+  }
+
+  /**
+   * Updates the accent pattern for velocity emphasis
+   * Emphasizes certain beats based on the selected pattern
+   */
+  private updateAccentPattern(type: 'none' | 'downbeats' | 'offbeats' | 'every-3rd'): void {
+    this.arpeggiator.setAccentPattern(type);
+  }
+
+  /**
+   * Updates the gate probability (note skip chance)
+   * Lower values create more generative/sparse patterns
+   */
+  private updateGateProbability(chance: number): void {
+    this.arpeggiator.setGateProbability(chance);
+  }
+
+  /**
+   * Updates the ratchet count (note repeat subdivision)
+   * Values > 1 create rapid note repeats within each step
+   */
+  private updateRatchetCount(count: number): void {
+    this.arpeggiator.setRatchetCount(count);
   }
 
   /**
@@ -502,7 +704,13 @@ class MIDIController {
       console.error(`Invalid note in main playNote: ${note} (type: ${typeof note})`);
       return;
     }
-    
+
+    // Check if note is in the current scale (if scale filtering is enabled)
+    if (this.scaleFilter.isFilteringActive() && !this.scaleFilter.isNoteInScale(note)) {
+      // Note is filtered out - don't play it
+      return;
+    }
+
     // Check if note is already playing
     if (this.state.activeNotes.has(note.toString())) return;
     
@@ -639,9 +847,9 @@ class MIDIController {
   private updateArpeggiatorButtonText(): void {
     const button = document.getElementById('arpeggiator-toggle');
     if (!button) return;
-    
+
     const enabled = this.arpeggiator.isEnabled();
-    
+
     if (!enabled) {
       button.textContent = 'Enable Arpeggiator';
     } else {
@@ -650,6 +858,34 @@ class MIDIController {
     }
   }
 
+  /**
+   * Toggles the scale filter on/off
+   */
+  private toggleScaleFilter(): void {
+    const enabled = !this.scaleFilter.isEnabled();
+    this.scaleFilter.setEnabled(enabled);
+
+    if (enabled) {
+      const state = this.scaleFilter.getState();
+      this.uiController.updateStatus(`Scale Filter Enabled: ${state.rootNoteName} ${state.scaleName}`, 'success');
+    } else {
+      this.uiController.updateStatus('Scale Filter Disabled', 'info');
+    }
+
+    // Update piano highlighting
+    this.updateUI();
+  }
+
+  /**
+   * Updates the scale filter button text based on enabled state
+   */
+  private updateScaleFilterButtonText(): void {
+    const button = document.getElementById('scale-filter-toggle');
+    if (!button) return;
+
+    const enabled = this.scaleFilter.isEnabled();
+    button.textContent = enabled ? 'Disable Scale Filter' : 'Enable Scale Filter';
+  }
 
   /**
    * Gets the current arpeggiator state
@@ -744,17 +980,45 @@ class MIDIController {
    */
   private updateUI(): void {
     const layout = this.keyboardInput.getLayout();
-    
+
     // Ensure the layout select reflects the current state
     const layoutSelect = document.getElementById('layout-select') as HTMLSelectElement;
     if (layoutSelect && layoutSelect.value !== layout.name) {
       layoutSelect.value = layout.name;
     }
-    
+
     this.uiController.createPiano(layout, this.state.currentOctave);
     this.uiController.updateKeyboardMapping(layout);
     this.uiController.updateOctaveDisplay(this.state.currentOctave);
     this.updateArpeggiatorButtonText();
+    this.updateScaleFilterButtonText();
+
+    // Update scale highlighting
+    if (this.scaleFilter.isFilteringActive()) {
+      const scaleNotes = this.scaleFilter.getScaleNotes(0, 10);
+      this.uiController.setScaleHighlight(scaleNotes, true);
+    } else {
+      this.uiController.setScaleHighlight([], false);
+    }
+
+    // Restore active key visual states for currently playing notes
+    this.uiController.restoreActiveKeyStates(this.state.activeNotes);
+  }
+
+  /**
+   * Reads the current scale UI controls and applies them to the filter
+   * Ensures the filter state matches the default dropdown selections on load
+   */
+  private syncScaleFilterFromUI(): void {
+    const rootSelect = document.getElementById('scale-root') as HTMLSelectElement | null;
+    const typeSelect = document.getElementById('scale-type') as HTMLSelectElement | null;
+
+    if (rootSelect) {
+      this.scaleFilter.setRootNote(parseInt(rootSelect.value) || 0);
+    }
+    if (typeSelect) {
+      this.scaleFilter.setScaleType(typeSelect.value || 'chromatic');
+    }
   }
 
   /**

@@ -226,6 +226,58 @@ body {
     box-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
+/* Scale highlighting */
+.white-key.in-scale {
+    box-shadow: 0 0 12px rgba(76, 175, 80, 0.6), 0 2px 4px rgba(0,0,0,0.2);
+    border: 2px solid rgba(76, 175, 80, 0.8);
+}
+
+.black-key.in-scale {
+    box-shadow: 0 0 12px rgba(33, 150, 243, 0.8), 0 2px 4px rgba(0,0,0,0.3);
+    border: 2px solid rgba(33, 150, 243, 0.9);
+}
+
+/* Active state takes precedence over scale highlighting */
+.white-key.active.in-scale {
+    background: linear-gradient(to bottom, #4CAF50, #45a049);
+    color: white;
+    transform: scale(0.98);
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.8), 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.black-key.active.in-scale {
+    background: linear-gradient(to bottom, #2196F3, #1976D2);
+    transform: scale(0.98);
+    box-shadow: 0 0 15px rgba(33, 150, 243, 0.9), 0 1px 2px rgba(0,0,0,0.3);
+}
+
+/* Scale filter controls styling */
+.scale-filter-controls {
+    display: flex;
+    gap: 15px;
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.scale-filter-controls .control-group {
+    background: rgba(255,255,255,0.05);
+    padding: 10px;
+    border-radius: 8px;
+    min-width: 120px;
+}
+
+.scale-filter-controls .control-group label {
+    font-size: 12px;
+    margin-bottom: 5px;
+    opacity: 0.9;
+}
+
 .keyboard-mapping {
     background: rgba(255,255,255,0.1);
     padding: 20px;

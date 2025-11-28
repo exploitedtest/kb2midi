@@ -111,9 +111,20 @@ Note offsets are layout-specific mappings from keyboard keys to semitone positio
 - **Live Parameter Integration**: Uses real-time UI values for MIDI channel and velocity
 - **Resilient Timing**: Works without explicit DAW transport events, auto-starts on clock detection
 - **Suspend/Resume Support**: Maintains state across application lifecycle events
-- **Patterns**: Up, Down, Up-Down, Down-Up, Random, and Chord modes
-- **Swing/Shuffle**: Configurable timing offset for humanized feel
-- **Gate Length**: Note duration control independent of step timing
+- **Patterns**: Up, Down, Up-Down, Down-Up, Random, Chord, Stacked Chord, and Timeline modes
+- **Timing Strategies**: Modular timing system supporting straight, swing, shuffle, dotted, and humanize feels
+  - **Straight**: Mechanical precision (default)
+  - **Swing**: Classic swing feel (delays offbeats by up to 50%)
+  - **Shuffle**: Triplet feel (delays offbeats to 66.67% position)
+  - **Dotted**: Dotted eighth feel (delays offbeats to 75% position)
+  - **Humanize**: Tempo-adaptive random variation (±15ms @ 120 BPM, scales with tempo)
+  - **Layered Timing**: Combine multiple strategies (e.g., swing + humanize for groovy but loose feel)
+- **Gate Length**: Note duration control independent of step timing (minimum 5ms safety)
+- **Velocity Humanization**: Random ±10 velocity unit variation per step for organic feel
+- **Accent Patterns**: Velocity emphasis on specific beats (downbeats, offbeats, every 3rd)
+- **Gate Probability**: Generative note skipping (0-100%) for sparse, evolving patterns
+- **Ratcheting**: Note subdivision and repeat (2x, 3x, 4x) within each step
+- **Latch Mode**: Toggle notes on/off instead of hold (available globally, not just arpeggiator)
 
 ### MIDI Clock Integration
 - **Input Selection**: Auto-detection of best MIDI clock source with manual override via Clock Input dropdown
@@ -145,6 +156,38 @@ The Web MIDI API cannot create MIDI devices visible to other applications. Users
 - **Dynamic Discovery**: Automatically detects new MIDI devices and removes disconnected ones
 - **Smart Fallback**: Auto-switches to best available device when selected device disconnects
 - **UI Synchronization**: Updates device dropdowns in real-time without user intervention
+
+### Arpeggiator Timing Implementation
+
+The timing system uses a simple strategy pattern with `setTimeout` scheduling:
+
+**Architecture:**
+- **TimingStrategy Interface**: Single method `getDelayOffset(globalStep, baseStepMs)` returns timing offset in milliseconds
+- **Global Step Counter**: Tracks absolute step position for patterns that need it (swing delays odd steps)
+- **setTimeout Integration**: Offsets applied via `setTimeout` for simplicity and browser optimization
+- **No Custom Scheduler**: Uses browser's native `setTimeout` (already optimized for timing precision)
+- **No Object Pooling**: Allocating 4-16 events/second is trivial for modern JavaScript GC
+
+**Generative Features:**
+- **VelocityHumanize**: Seeded PRNG applies consistent ±10 velocity variation per step
+- **AccentPattern**: Pattern-based velocity multipliers (1.25x for accented beats)
+- **GateProbability**: Seeded random note skipping for repeatable generative patterns
+- **Tempo-Adaptive Humanization**: Scales timing variation with tempo (reference: 125ms @ 120 BPM)
+- **Ratcheting**: Note subdivision using nested `setTimeout` calls (90% gate limit to prevent overlap)
+
+**Implementation Principles:**
+- Keep it simple: ~730 LOC for all timing + generative features vs complex alternatives
+- Use proven patterns: `setTimeout` + `Map` tracking (reliable, debuggable)
+- Strategy pattern enables extensibility (easy to add new timing types)
+- Layered timing via simple addition of offsets (musically correct)
+- Seeded randomization ensures repeatable patterns across sessions
+
+**Why This Approach:**
+- MIDI needs ~1ms precision; `setTimeout` easily achieves this
+- Browser highly optimizes `setTimeout` for timing-critical tasks
+- Simple code = fewer bugs, easier maintenance
+- No premature optimization (no measurable benefit from complex scheduling)
+- Seeded PRNG allows creative repeatability (change seed for variation)
 
 ## Testing Approach
 
