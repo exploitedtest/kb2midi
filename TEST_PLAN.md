@@ -1,7 +1,7 @@
 # kb2midi Test Plan
-**Branch:** `claude/simplified-timing-01GpXYMJjazHmbaZrpjSaajv`
+**Branches:** `claude/simplified-timing-01GpXYMJjazHmbaZrpjSaajv`, `claude/master-clock-module-01H2ZSFjEqR57Mw4cxcNBsg8`
 **Baseline:** Commit `37d7c65` (pre-dev branch)
-**Date:** 2025-11-15
+**Last Updated:** 2025-11-28
 
 ## Summary of Changes
 
@@ -76,12 +76,16 @@ These features existed in the baseline and should continue to work:
 - [ ] Arpeggiator respects held notes (add/remove notes while running)
 
 #### D. MIDI Clock Sync
-- [ ] Clock input dropdown shows available inputs
-- [ ] Auto-select chooses best clock input
-- [ ] Manual selection of specific clock input works
-- [ ] BPM detection displays correct tempo
-- [ ] Beat indicator flashes on quarter notes
-- [ ] Arpeggiator syncs to external clock
+- [ ] Clock Source dropdown shows External MIDI, Internal Master, and Off options
+- [ ] Clock input dropdown shows available inputs (when External MIDI selected)
+- [ ] Auto-select chooses best clock input (External MIDI mode)
+- [ ] Manual selection of specific clock input works (External MIDI mode)
+- [ ] BPM detection displays correct tempo (External MIDI mode)
+- [ ] Beat indicator flashes on quarter notes (both modes)
+- [ ] Arpeggiator syncs to external clock (External MIDI mode)
+- [ ] Arpeggiator syncs to internal clock (Internal Master mode)
+- [ ] Internal BPM control shows/hides based on clock source
+- [ ] Internal clock Start/Stop button works
 - [ ] Hot-plug: connect/disconnect MIDI devices updates list
 
 #### E. Application Lifecycle
@@ -92,7 +96,215 @@ These features existed in the baseline and should continue to work:
 
 ---
 
-### Part 2: New Timing Strategy Features
+### Part 2: Master Clock Module (Internal Clock)
+
+**Branch:** `claude/master-clock-module-01H2ZSFjEqR57Mw4cxcNBsg8`
+
+These tests verify the internal master clock functionality that allows the app to function as a timing source instead of only listening to external DAW clock signals.
+
+#### Master Clock Basic Functionality
+
+**Test Cases:**
+
+1. **Clock Source Selection**
+   - [ ] Select "External MIDI" from Clock Source dropdown
+   - [ ] Verify "Clock Input" dropdown is visible
+   - [ ] Verify "BPM" and "Start" button are hidden
+   - [ ] Select "Internal Master" from Clock Source dropdown
+   - [ ] Verify "Clock Input" dropdown is hidden
+   - [ ] Verify "BPM" input and "Start" button are visible
+   - [ ] Select "Off" from Clock Source dropdown
+   - [ ] Verify both clock controls are hidden
+   - [ ] Expected: UI controls show/hide correctly based on selected source
+
+2. **Internal Clock Start/Stop**
+   - [ ] Select "Internal Master" clock source
+   - [ ] Click "Start" button
+   - [ ] Verify button text changes to "Stop"
+   - [ ] Verify clock status shows "🟢" (running)
+   - [ ] Click "Stop" button
+   - [ ] Verify button text changes to "Start"
+   - [ ] Verify clock status shows "🔴" (stopped)
+   - [ ] Expected: Start/stop button toggles correctly
+
+3. **Internal Clock BPM Control**
+   - [ ] Select "Internal Master" clock source
+   - [ ] Set BPM to 120
+   - [ ] Click "Start"
+   - [ ] Verify clock status shows "120 BPM"
+   - [ ] Change BPM to 140 while running
+   - [ ] Verify clock status updates to "140 BPM"
+   - [ ] Verify tempo changes immediately
+   - [ ] Expected: BPM changes apply in real-time
+
+4. **Internal Clock Range Validation**
+   - [ ] Try setting BPM to 20 (minimum)
+   - [ ] Expected: Accepts value
+   - [ ] Try setting BPM to 300 (maximum)
+   - [ ] Expected: Accepts value
+   - [ ] Try setting BPM below 20
+   - [ ] Expected: Input constrained to minimum
+   - [ ] Try setting BPM above 300
+   - [ ] Expected: Input constrained to maximum
+
+#### Arpeggiator with Internal Clock
+
+**Test Cases:**
+
+1. **Arpeggiator Sync to Internal Clock**
+   - [ ] Select "Internal Master" clock source
+   - [ ] Set BPM to 120
+   - [ ] Click "Start"
+   - [ ] Enable arpeggiator with Up pattern at 1/4 division
+   - [ ] Hold C-E-G chord
+   - [ ] Verify arpeggiator plays in sync with internal clock
+   - [ ] Expected: Steady, predictable timing at 120 BPM
+
+2. **Arpeggiator Division Sync**
+   - [ ] Keep internal clock at 120 BPM
+   - [ ] Change arpeggiator division to 1/8
+   - [ ] Verify arpeggiator doubles speed
+   - [ ] Change to 1/2 division
+   - [ ] Verify arpeggiator halves speed
+   - [ ] Expected: Division changes apply correctly
+
+3. **BPM Changes During Arpeggiation**
+   - [ ] Start internal clock at 120 BPM
+   - [ ] Enable arpeggiator and hold notes
+   - [ ] Change BPM to 180 (50% faster)
+   - [ ] Verify arpeggiator speeds up smoothly
+   - [ ] Change BPM to 60 (50% slower)
+   - [ ] Verify arpeggiator slows down smoothly
+   - [ ] Expected: No glitches or stuck notes during tempo changes
+
+4. **Stop/Start During Arpeggiation**
+   - [ ] Start internal clock and arpeggiator
+   - [ ] Click "Stop" button
+   - [ ] Verify arpeggiator stops
+   - [ ] Click "Start" button
+   - [ ] Verify arpeggiator resumes
+   - [ ] Expected: Clean stop/start behavior
+
+#### Clock Source Switching
+
+**Test Cases:**
+
+1. **Switch from External to Internal**
+   - [ ] Connect to DAW with external clock
+   - [ ] Start DAW playback
+   - [ ] Verify external clock sync works
+   - [ ] Switch to "Internal Master"
+   - [ ] Verify external clock stops
+   - [ ] Start internal clock
+   - [ ] Verify internal clock works
+   - [ ] Expected: Clean transition, no stuck notes
+
+2. **Switch from Internal to External**
+   - [ ] Start with internal clock at 120 BPM
+   - [ ] Enable arpeggiator
+   - [ ] Switch to "External MIDI"
+   - [ ] Verify internal clock stops
+   - [ ] Start DAW playback
+   - [ ] Verify arpeggiator syncs to external clock
+   - [ ] Expected: Clean transition, arpeggiator re-syncs
+
+3. **Switch to Off**
+   - [ ] Start with internal clock running
+   - [ ] Enable arpeggiator
+   - [ ] Switch to "Off"
+   - [ ] Verify arpeggiator stops (no clock)
+   - [ ] Verify status shows "No Clock Sync"
+   - [ ] Expected: All clock-dependent features stop
+
+#### Integration with Existing Features
+
+**Test Cases:**
+
+1. **Internal Clock + All Timing Features**
+   - [ ] Select "Internal Master" at 120 BPM
+   - [ ] Enable arpeggiator with Swing timing
+   - [ ] Enable Humanize checkbox
+   - [ ] Enable Velocity Humanization
+   - [ ] Set Accent to "Downbeats"
+   - [ ] Verify all features work together
+   - [ ] Expected: Swing + humanization + accents all apply correctly
+
+2. **Internal Clock + Latch Mode**
+   - [ ] Select "Internal Master" at 120 BPM
+   - [ ] Start clock
+   - [ ] Enable latch mode
+   - [ ] Enable arpeggiator
+   - [ ] Toggle notes on/off
+   - [ ] Expected: Latch mode works identically to external clock
+
+3. **Internal Clock + Tab Key Boost**
+   - [ ] Start internal clock at 120 BPM
+   - [ ] Enable arpeggiator at 1/4 division
+   - [ ] Hold Tab key
+   - [ ] Verify arpeggiator rate doubles
+   - [ ] Release Tab key
+   - [ ] Verify rate returns to normal
+   - [ ] Expected: Momentary boost works with internal clock
+
+#### Beat Indicator Sync
+
+**Test Cases:**
+
+1. **Quarter Note Pulses**
+   - [ ] Start internal clock at 120 BPM
+   - [ ] Verify beat indicator flashes every quarter note
+   - [ ] Count 4 flashes
+   - [ ] Verify timing is ~2 seconds (120 BPM = 2 beats/sec)
+   - [ ] Expected: Visual sync with internal clock
+
+2. **Beat Indicator at Different Tempos**
+   - [ ] Set BPM to 60
+   - [ ] Count time between flashes (~1 second)
+   - [ ] Set BPM to 180
+   - [ ] Count time between flashes (~0.67 seconds)
+   - [ ] Expected: Beat indicator adapts to tempo
+
+#### Edge Cases
+
+**Test Cases:**
+
+1. **Rapid BPM Changes**
+   - [ ] Start internal clock at 120 BPM
+   - [ ] Rapidly change BPM: 120→240→60→180→120
+   - [ ] Verify no console errors
+   - [ ] Verify arpeggiator stays in sync
+   - [ ] Expected: Stable behavior, no glitches
+
+2. **Start/Stop Cycles**
+   - [ ] Rapidly click Start/Stop 10 times
+   - [ ] Verify no stuck notes
+   - [ ] Verify no console errors
+   - [ ] Expected: Robust start/stop handling
+
+3. **Very Fast Tempo (300 BPM)**
+   - [ ] Set BPM to 300
+   - [ ] Start clock with arpeggiator at 1/8 division
+   - [ ] Run for 30 seconds
+   - [ ] Verify stable timing, no dropped notes
+   - [ ] Expected: Handles fast tempos without issues
+
+4. **Very Slow Tempo (20 BPM)**
+   - [ ] Set BPM to 20
+   - [ ] Start clock with arpeggiator at 1/4 division
+   - [ ] Verify notes play at correct slow intervals
+   - [ ] Expected: Handles slow tempos correctly
+
+5. **Long-Running Clock**
+   - [ ] Start internal clock at 120 BPM
+   - [ ] Let run for 5 minutes
+   - [ ] Monitor CPU usage
+   - [ ] Verify no memory leaks
+   - [ ] Verify timing stays accurate
+   - [ ] Expected: Stable long-term operation
+
+---
+
+### Part 3: New Timing Strategy Features
 
 These are **new** features added in this branch:
 
