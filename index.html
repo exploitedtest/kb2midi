@@ -71,7 +71,53 @@
                 <option value="simple">Simple</option>
             </select>
         </div>
-        
+
+        <div class="control-group">
+            <label>Scale Filter</label>
+            <button id="scale-filter-toggle">Enable Scale Filter</button>
+        </div>
+
+        <div class="scale-filter-controls" id="scale-filter-controls" style="display: none;">
+            <div class="control-group">
+                <label for="scale-root">Root Note</label>
+                <select id="scale-root">
+                    <option value="0">C</option>
+                    <option value="1">C#</option>
+                    <option value="2">D</option>
+                    <option value="3">D#</option>
+                    <option value="4">E</option>
+                    <option value="5">F</option>
+                    <option value="6">F#</option>
+                    <option value="7">G</option>
+                    <option value="8">G#</option>
+                    <option value="9">A</option>
+                    <option value="10">A#</option>
+                    <option value="11">B</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="scale-type">Scale Type</label>
+                <select id="scale-type">
+                    <option value="chromatic" selected>Chromatic (All Notes)</option>
+                    <option value="major">Major (Ionian)</option>
+                    <option value="minor">Natural Minor (Aeolian)</option>
+                    <option value="harmonicMinor">Harmonic Minor</option>
+                    <option value="melodicMinor">Melodic Minor</option>
+                    <option value="dorian">Dorian</option>
+                    <option value="phrygian">Phrygian</option>
+                    <option value="lydian">Lydian</option>
+                    <option value="mixolydian">Mixolydian</option>
+                    <option value="locrian">Locrian</option>
+                    <option value="pentatonicMajor">Pentatonic Major</option>
+                    <option value="pentatonicMinor">Pentatonic Minor</option>
+                    <option value="blues">Blues</option>
+                    <option value="wholeTone">Whole Tone</option>
+                    <option value="diminished">Diminished</option>
+                    <option value="augmented">Augmented</option>
+                </select>
+            </div>
+        </div>
+
         <div class="control-group">
             <label>Actions</label>
             <button id="panic-button">Stop All Notes</button>

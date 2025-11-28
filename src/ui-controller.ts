@@ -30,9 +30,13 @@ export class UIController {
   private pitchIndicator: HTMLElement | null = null;
   private octaveDownIndicator: HTMLElement | null = null;
   private octaveUpIndicator: HTMLElement | null = null;
-  
-  private activeKeys = new Map<number, HTMLElement>();
-  private keyElements = new Map<string, HTMLElement>();
+
+  private pianoKeyElements = new Map<number, HTMLElement>(); // Maps MIDI note numbers to piano key DOM elements
+  private keyElements = new Map<string, HTMLElement>(); // Maps keyboard key codes to keyboard mapping DOM elements
+
+  // Scale highlighting
+  private scaleNotes: Set<number> = new Set();
+  private scaleHighlightEnabled: boolean = false;
   
   // Unified control registry
   private controls = new Map<string, UIControl>();
@@ -247,7 +251,7 @@ export class UIController {
    */
   createPiano(layout: KeyboardLayout, baseOctave: number): void {
     this.pianoContainer.innerHTML = '';
-    this.activeKeys.clear();
+    this.pianoKeyElements.clear();
     
     if (layout.name === 'simple') {
       this.createSimplePiano(layout, baseOctave);
@@ -270,7 +274,7 @@ export class UIController {
     whiteNotes.forEach((noteOffset, index) => {
       const key = this.createPianoKey(noteOffset, baseOctave, keyboardKeys[index]);
       this.pianoContainer.appendChild(key);
-      this.activeKeys.set((baseOctave * 12) + noteOffset, key);
+      this.pianoKeyElements.set((baseOctave * 12) + noteOffset, key);
     });
     
     // Create black keys with correct positioning from original JavaScript
@@ -288,7 +292,7 @@ export class UIController {
     blackKeyData.forEach(({ note, left, key }) => {
       const keyElement = this.createPianoKey(note, baseOctave, key, true, left);
       this.pianoContainer.appendChild(keyElement);
-      this.activeKeys.set((baseOctave * 12) + note, keyElement);
+      this.pianoKeyElements.set((baseOctave * 12) + note, keyElement);
     });
   }
 
@@ -314,7 +318,7 @@ export class UIController {
     bottomWhiteNotes.forEach((noteOffset, index) => {
       const key = this.createPianoKey(noteOffset, baseOctave, bottomKeys[index]);
       bottomRow.appendChild(key);
-      this.activeKeys.set((baseOctave * 12) + noteOffset, key);
+      this.pianoKeyElements.set((baseOctave * 12) + noteOffset, key);
     });
     
     // Create top row (higher notes) - shifted left by 3 white keys to overlap duplicates
@@ -325,7 +329,7 @@ export class UIController {
     topWhiteNotes.forEach((noteOffset, index) => {
       const key = this.createPianoKey(noteOffset, baseOctave, topKeys[index]);
       topRow.appendChild(key);
-      this.activeKeys.set((baseOctave * 12) + noteOffset, key);
+      this.pianoKeyElements.set((baseOctave * 12) + noteOffset, key);
     });
     
     // Add rows in correct order: bottom (lower notes) first, then top (higher notes)
@@ -372,14 +376,14 @@ export class UIController {
     bottomBlackNotes.forEach(({ note: noteOffset, left, key: keyBinding }) => {
       const key = this.createPianoKey(noteOffset, baseOctave, keyBinding, true, left);
       bottomRow.appendChild(key);
-      this.activeKeys.set((baseOctave * 12) + noteOffset, key);
+      this.pianoKeyElements.set((baseOctave * 12) + noteOffset, key);
     });
     
     // Add black keys to top row
     topBlackNotes.forEach(({ note: noteOffset, left, key: keyBinding }) => {
       const key = this.createPianoKey(noteOffset, baseOctave, keyBinding, true, left);
       topRow.appendChild(key);
-      this.activeKeys.set((baseOctave * 12) + noteOffset, key);
+      this.pianoKeyElements.set((baseOctave * 12) + noteOffset, key);
     });
   }
 
@@ -394,37 +398,40 @@ export class UIController {
    * @returns The created key element
    */
   private createPianoKey(
-    noteOffset: number, 
-    baseOctave: number, 
-    keyBinding: string, 
-    isBlack: boolean = false, 
+    noteOffset: number,
+    baseOctave: number,
+    keyBinding: string,
+    isBlack: boolean = false,
     leftPosition?: number
   ): HTMLElement {
     const key = document.createElement('div');
     key.className = `key ${isBlack ? 'black-key' : 'white-key'}`;
     const note = (baseOctave * 12) + noteOffset;
     key.dataset.note = note.toString();
-    
+
     if (leftPosition !== undefined) {
       key.style.left = `${leftPosition}px`;
     }
-    
+
     const label = document.createElement('div');
     label.className = isBlack ? 'black-key-label' : 'key-label';
-    
+
     if (isBlack) {
       label.textContent = keyBinding;
     } else {
       label.innerHTML = `<span class="note-label">${getMIDINoteName(note)}</span><br><span class="key-binding">${keyBinding}</span>`;
     }
-    
+
     key.appendChild(label);
-    
+
     // Add event listeners
     key.addEventListener('mousedown', () => this.handlePianoClick(note, true));
     key.addEventListener('mouseup', () => this.handlePianoClick(note, false));
     key.addEventListener('mouseleave', () => this.handlePianoClick(note, false));
-    
+
+    // Apply scale highlighting if enabled
+    this.updateKeyScaleHighlight(key, note);
+
     return key;
   }
 
@@ -446,7 +453,7 @@ export class UIController {
    * @param active - Whether the key should appear active (pressed)
    */
   updatePianoKeyImmediate(note: number, active: boolean): void {
-    const keyElement = this.activeKeys.get(note);
+    const keyElement = this.pianoKeyElements.get(note);
     if (keyElement) {
       if (active) {
         keyElement.classList.add('active');
@@ -937,5 +944,48 @@ export class UIController {
       this.flushUpdates();
       this.updateScheduled = false;
     }
+  }
+
+  /**
+   * Sets which notes are in the current scale for highlighting
+   * @param scaleNotes - Array of MIDI note numbers that are in the scale
+   * @param enabled - Whether scale highlighting should be enabled
+   */
+  setScaleHighlight(scaleNotes: number[], enabled: boolean): void {
+    this.scaleNotes = new Set(scaleNotes);
+    this.scaleHighlightEnabled = enabled;
+
+    // Update all piano keys with scale highlighting
+    this.pianoKeyElements.forEach((keyElement, note) => {
+      this.updateKeyScaleHighlight(keyElement, note);
+    });
+  }
+
+  /**
+   * Updates a single key element with scale highlighting
+   * @param keyElement - The DOM element representing the key
+   * @param note - The MIDI note number
+   */
+  private updateKeyScaleHighlight(keyElement: HTMLElement, note: number): void {
+    if (this.scaleHighlightEnabled && this.scaleNotes.has(note)) {
+      keyElement.classList.add('in-scale');
+    } else {
+      keyElement.classList.remove('in-scale');
+    }
+  }
+
+  /**
+   * Restores active key visual states after piano DOM rebuild
+   * @param activeNotes - Map of currently playing notes
+   */
+  restoreActiveKeyStates(activeNotes: Map<string, any>): void {
+    // Iterate over all currently playing notes and reapply visual state
+    activeNotes.forEach((noteInfo) => {
+      const note = noteInfo.note;
+      const keyElement = this.pianoKeyElements.get(note);
+      if (keyElement) {
+        keyElement.classList.add('active');
+      }
+    });
   }
 }

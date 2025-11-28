@@ -12,6 +12,7 @@ import {
   LayeredTiming,
   VelocityHumanize
 } from './arpeggiator';
+import { ScaleFilter } from './scale-filter';
 import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
 
 // Enhanced control configuration with better type safety
@@ -34,6 +35,7 @@ class MIDIController {
   private uiController: UIController;
   private clockSync: ClockSync;
   private arpeggiator: Arpeggiator;
+  private scaleFilter: ScaleFilter;
   private isActive = false;
   // Tracks whether the app is in its initial async initialization
   private initializing = true;
@@ -65,7 +67,8 @@ class MIDIController {
     this.keyboardInput = new KeyboardInput();
     this.uiController = new UIController();
     this.arpeggiator = new Arpeggiator(this.clockSync);
-    
+    this.scaleFilter = new ScaleFilter();
+
     this.initialize();
   }
 
@@ -107,12 +110,15 @@ class MIDIController {
 
     // Set up arpeggiator
     this.setupArpeggiator();
-
+    
     // Set up keyboard input handlers
     this.setupKeyboardHandlers();
     
     // Set up UI handlers
     this.setupUIHandlers();
+
+    // Sync scale filter defaults with current UI selections
+    this.syncScaleFilterFromUI();
     
     // Wire up velocity changes to keyboard input
     this.uiController.onVelocityChange((velocity) => {
@@ -465,6 +471,42 @@ class MIDIController {
           this.keyboardInput.setLatchMode(value === 'true');
         },
         type: 'checkbox'
+      },
+
+      // Scale filter toggle
+      {
+        id: 'scale-filter-toggle',
+        setter: () => {
+          this.toggleScaleFilter();
+          this.updateScaleFilterButtonText();
+
+          // Show/hide scale filter controls
+          const scaleControls = document.getElementById('scale-filter-controls');
+          if (scaleControls) {
+            scaleControls.style.display = this.scaleFilter.isEnabled() ? 'block' : 'none';
+          }
+        },
+        type: 'button'
+      },
+
+      // Scale root note
+      {
+        id: 'scale-root',
+        setter: (value) => {
+          this.scaleFilter.setRootNote(parseInt(value));
+          this.updateUI(); // Update piano highlighting
+        },
+        type: 'select'
+      },
+
+      // Scale type
+      {
+        id: 'scale-type',
+        setter: (value) => {
+          this.scaleFilter.setScaleType(value);
+          this.updateUI(); // Update piano highlighting
+        },
+        type: 'select'
       }
     ];
 
@@ -620,7 +662,13 @@ class MIDIController {
       console.error(`Invalid note in main playNote: ${note} (type: ${typeof note})`);
       return;
     }
-    
+
+    // Check if note is in the current scale (if scale filtering is enabled)
+    if (this.scaleFilter.isFilteringActive() && !this.scaleFilter.isNoteInScale(note)) {
+      // Note is filtered out - don't play it
+      return;
+    }
+
     // Check if note is already playing
     if (this.state.activeNotes.has(note.toString())) return;
     
@@ -757,9 +805,9 @@ class MIDIController {
   private updateArpeggiatorButtonText(): void {
     const button = document.getElementById('arpeggiator-toggle');
     if (!button) return;
-    
+
     const enabled = this.arpeggiator.isEnabled();
-    
+
     if (!enabled) {
       button.textContent = 'Enable Arpeggiator';
     } else {
@@ -768,6 +816,34 @@ class MIDIController {
     }
   }
 
+  /**
+   * Toggles the scale filter on/off
+   */
+  private toggleScaleFilter(): void {
+    const enabled = !this.scaleFilter.isEnabled();
+    this.scaleFilter.setEnabled(enabled);
+
+    if (enabled) {
+      const state = this.scaleFilter.getState();
+      this.uiController.updateStatus(`Scale Filter Enabled: ${state.rootNoteName} ${state.scaleName}`, 'success');
+    } else {
+      this.uiController.updateStatus('Scale Filter Disabled', 'info');
+    }
+
+    // Update piano highlighting
+    this.updateUI();
+  }
+
+  /**
+   * Updates the scale filter button text based on enabled state
+   */
+  private updateScaleFilterButtonText(): void {
+    const button = document.getElementById('scale-filter-toggle');
+    if (!button) return;
+
+    const enabled = this.scaleFilter.isEnabled();
+    button.textContent = enabled ? 'Disable Scale Filter' : 'Enable Scale Filter';
+  }
 
   /**
    * Gets the current arpeggiator state
@@ -862,17 +938,45 @@ class MIDIController {
    */
   private updateUI(): void {
     const layout = this.keyboardInput.getLayout();
-    
+
     // Ensure the layout select reflects the current state
     const layoutSelect = document.getElementById('layout-select') as HTMLSelectElement;
     if (layoutSelect && layoutSelect.value !== layout.name) {
       layoutSelect.value = layout.name;
     }
-    
+
     this.uiController.createPiano(layout, this.state.currentOctave);
     this.uiController.updateKeyboardMapping(layout);
     this.uiController.updateOctaveDisplay(this.state.currentOctave);
     this.updateArpeggiatorButtonText();
+    this.updateScaleFilterButtonText();
+
+    // Update scale highlighting
+    if (this.scaleFilter.isFilteringActive()) {
+      const scaleNotes = this.scaleFilter.getScaleNotes(0, 10);
+      this.uiController.setScaleHighlight(scaleNotes, true);
+    } else {
+      this.uiController.setScaleHighlight([], false);
+    }
+
+    // Restore active key visual states for currently playing notes
+    this.uiController.restoreActiveKeyStates(this.state.activeNotes);
+  }
+
+  /**
+   * Reads the current scale UI controls and applies them to the filter
+   * Ensures the filter state matches the default dropdown selections on load
+   */
+  private syncScaleFilterFromUI(): void {
+    const rootSelect = document.getElementById('scale-root') as HTMLSelectElement | null;
+    const typeSelect = document.getElementById('scale-type') as HTMLSelectElement | null;
+
+    if (rootSelect) {
+      this.scaleFilter.setRootNote(parseInt(rootSelect.value) || 0);
+    }
+    if (typeSelect) {
+      this.scaleFilter.setScaleType(typeSelect.value || 'chromatic');
+    }
   }
 
   /**
