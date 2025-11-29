@@ -39,10 +39,55 @@ This implementation adds **simplified timing strategies** and **6 new generative
 ## Test Plan
 
 ### Prerequisites
+
+#### For Manual Testing
 1. Virtual MIDI port created (IAC Driver on macOS, loopMIDI on Windows)
 2. DAW connected to virtual MIDI port (Logic Pro, Ableton, FL Studio, etc.)
 3. MIDI monitor open (optional but recommended for verification)
 4. `npm run dev` running or Electron build launched
+
+#### For Automated Testing
+1. Node.js and npm installed
+2. Dependencies installed: `npm install`
+3. Build passing: `npm run build`
+
+### Running Automated Tests
+
+**Unit Tests** (Master Clock, Clock Sync, etc.):
+```bash
+# Run all unit tests
+npm test
+
+# Run specific test suites
+npm run test:unit:master-clock
+npm run test:unit:clock-sync
+
+# Run with coverage report
+npm run test:coverage
+
+# Run in watch mode (during development)
+npm run test:watch
+```
+
+**End-to-End Tests**:
+```bash
+# Run all E2E tests
+npm run test:e2e
+
+# Run in headed mode (see browser)
+npm run test:e2e:headed
+
+# Run with debug mode
+npm run test:e2e:debug
+```
+
+**All Tests**:
+```bash
+# Type checking + all tests
+npm run type-check && npm run test:all
+```
+
+**Note**: All test scripts use `npx` internally to ensure correct test runner versions. See `tests/README.md` for detailed testing documentation.
 
 ### Part 1: Baseline Features (Regression Testing)
 

@@ -56,6 +56,13 @@ tests/
 
 ## Running Tests
 
+### Prerequisites
+
+```bash
+# Install dependencies (required before running tests)
+npm install
+```
+
 ### Quick Start
 
 ```bash
@@ -78,8 +85,15 @@ npm run test:all
 ### Unit Tests
 
 ```bash
-# Run once
+# Run all unit tests
 npm test
+
+# Run only unit tests (explicit)
+npm run test:unit
+
+# Run specific test files
+npm run test:unit:master-clock
+npm run test:unit:clock-sync
 
 # Watch mode (recommended for development)
 npm run test:watch
@@ -90,6 +104,8 @@ npm run test:coverage
 # With UI dashboard
 npm run test:ui
 ```
+
+**Note**: All test scripts use `npx` internally to ensure the local versions of Vitest and Playwright are used, even if not globally installed.
 
 ### E2E Tests
 
@@ -416,11 +432,17 @@ test: {
 #### Unit Tests
 
 ```bash
-# Run single test file
-npx vitest midi-engine.test.ts
+# Run single test file (using npm script)
+npm run test:unit:master-clock
+
+# Run single test file (direct npx)
+npx vitest run tests/unit/master-clock.test.ts
 
 # Run with specific pattern
 npx vitest --grep "should play a note"
+
+# Run specific file in watch mode
+npx vitest tests/unit/clock-sync.test.ts
 
 # Debug in VS Code
 # Add breakpoint and run "JavaScript Debug Terminal"
