@@ -105,7 +105,7 @@ npm run test:coverage
 npm run test:ui
 ```
 
-**Note**: All test scripts use `npx` internally to ensure the local versions of Vitest and Playwright are used, even if not globally installed.
+**Note**: All test scripts automatically use the locally installed versions of Vitest and Playwright from `node_modules/.bin`, even if not globally installed. npm automatically adds this directory to the PATH when running scripts.
 
 ### E2E Tests
 
@@ -432,17 +432,17 @@ test: {
 #### Unit Tests
 
 ```bash
-# Run single test file (using npm script)
+# Run single test file (using npm script - recommended)
 npm run test:unit:master-clock
 
-# Run single test file (direct npx)
-npx vitest run tests/unit/master-clock.test.ts
+# Run single test file (direct command)
+npm exec vitest run tests/unit/master-clock.test.ts
 
 # Run with specific pattern
-npx vitest --grep "should play a note"
+npm exec vitest --grep "should play a note"
 
 # Run specific file in watch mode
-npx vitest tests/unit/clock-sync.test.ts
+npm exec vitest tests/unit/clock-sync.test.ts
 
 # Debug in VS Code
 # Add breakpoint and run "JavaScript Debug Terminal"

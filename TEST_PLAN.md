@@ -87,7 +87,7 @@ npm run test:e2e:debug
 npm run type-check && npm run test:all
 ```
 
-**Note**: All test scripts use `npx` internally to ensure correct test runner versions. See `tests/README.md` for detailed testing documentation.
+**Note**: All test scripts automatically use locally installed test runners from `node_modules/.bin`. See `tests/README.md` for detailed testing documentation.
 
 ### Part 1: Baseline Features (Regression Testing)
 
