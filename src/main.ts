@@ -13,7 +13,7 @@ import {
   VelocityHumanize
 } from './arpeggiator';
 import { ScaleFilter } from './scale-filter';
-import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
+import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL, ClockSource } from './types';
 
 // Enhanced control configuration with better type safety
 interface ControlConfig {
@@ -205,13 +205,12 @@ class MIDIController {
     
     // Update UI when clock status changes
     this.clockSync.onStart(() => {
-      const bpm = this.clockSync.getBPM();
-      this.uiController.updateClockStatus('synced', bpm);
+      this.updateClockStatusDisplay('synced');
       this.updateArpeggiatorButtonText();
     });
 
     this.clockSync.onStop(() => {
-      this.uiController.updateClockStatus('stopped');
+      this.updateClockStatusDisplay('stopped');
       this.updateArpeggiatorButtonText();
     });
 
@@ -220,8 +219,7 @@ class MIDIController {
       const now = performance.now();
       if (now - lastBPMUpdate > 1000) { // Update every second
         if (this.clockSync.isRunning()) {
-          const bpm = this.clockSync.getBPM();
-          this.uiController.updateClockStatus('synced', bpm);
+          this.updateClockStatusDisplay('synced');
         }
         lastBPMUpdate = now;
       }
@@ -393,6 +391,21 @@ class MIDIController {
       }
     });
 
+    // Clock source selector
+    this.uiController.onClockSourceChange((source) => {
+      this.handleClockSourceChange(source as ClockSource);
+    });
+
+    // Internal clock BPM
+    this.uiController.onInternalBPMChange((bpm) => {
+      this.clockSync.setInternalBPM(bpm);
+    });
+
+    // Internal clock start/stop toggle
+    this.uiController.onInternalClockToggle(() => {
+      this.toggleInternalClock();
+    });
+
     // Unified control configurations
     const controlConfigs: ControlConfig[] = [
       // Panic button
@@ -406,7 +419,7 @@ class MIDIController {
         },
         type: 'button'
       },
-      
+
       // Arpeggiator toggle
       {
         id: 'arpeggiator-toggle',
@@ -1185,6 +1198,77 @@ class MIDIController {
     const inputs = this.midiEngine.getAvailableInputs();
     const options = inputs.map(i => ({ id: i.id, name: i.name || i.id }));
     this.uiController.populateClockInputs(options, this.preferredClockInputId);
+  }
+
+  /**
+   * Handle clock source change
+   */
+  private handleClockSourceChange(source: ClockSource): void {
+    this.clockSync.setClockSource(source);
+
+    // Update UI to show/hide appropriate controls
+    const externalControls = document.getElementById('external-clock-controls');
+    const internalControls = document.getElementById('internal-clock-controls');
+    const toggleButton = document.getElementById('internal-clock-toggle');
+    const isRunning = this.clockSync.isRunning();
+
+    if (externalControls && internalControls) {
+      externalControls.style.display = source === 'external' ? 'block' : 'none';
+      internalControls.style.display = source === 'internal' ? 'block' : 'none';
+    }
+
+    if (toggleButton) {
+      toggleButton.textContent = source === 'internal' && this.clockSync.isRunning() ? 'Stop' : 'Start';
+    }
+
+    // Update status message
+    if (source === 'internal') {
+      this.uiController.updateStatus('Internal Master Clock Selected', 'info');
+    } else if (source === 'external') {
+      this.uiController.updateStatus('External MIDI Clock Selected', 'info');
+    } else {
+      this.uiController.updateStatus('Clock Disabled', 'info');
+    }
+
+    // Keep clock status display in sync even when not running
+    const status = isRunning ? 'synced' : 'stopped';
+    this.updateClockStatusDisplay(status);
+
+    // Update arpeggiator button text
+    this.updateArpeggiatorButtonText();
+  }
+
+  /**
+   * Centralized helper to push clock status to the UI
+   */
+  private updateClockStatusDisplay(statusOverride?: 'synced' | 'free' | 'stopped', bpmOverride?: number): void {
+    const source = this.clockSync.getClockSource();
+    const bpm = bpmOverride !== undefined ? bpmOverride : this.clockSync.getBPM();
+    const bpmDisplay = bpm > 0 ? bpm : undefined;
+    const status = statusOverride ?? (this.clockSync.isRunning() ? 'synced' : 'stopped');
+    this.uiController.updateClockStatus(status, bpmDisplay, source);
+  }
+
+  /**
+   * Toggle internal clock start/stop
+   */
+  private toggleInternalClock(): void {
+    const button = document.getElementById('internal-clock-toggle');
+    if (!button) return;
+
+    if (this.clockSync.getClockSource() !== 'internal') {
+      this.uiController.updateStatus('Select "Internal Master" as clock source first', 'error');
+      button.textContent = 'Start';
+      return;
+    }
+
+    if (this.clockSync.isRunning()) {
+      this.clockSync.stopInternalClock();
+    } else {
+      this.clockSync.startInternalClock();
+    }
+
+    button.textContent = this.clockSync.isRunning() ? 'Stop' : 'Start';
   }
 
   /**

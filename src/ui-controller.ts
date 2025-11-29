@@ -640,29 +640,45 @@ export class UIController {
    * @param status - The current clock sync status
    * @param bpm - Optional BPM to display
    */
-  updateClockStatus(status: 'synced' | 'free' | 'stopped', bpm?: number): void {
+  updateClockStatus(
+    status: 'synced' | 'free' | 'stopped',
+    bpm?: number,
+    source: 'external' | 'internal' | 'off' = 'external'
+  ): void {
     if (!this.clockStatusElement) return;
-    
+
     let icon: string;
     let text: string;
     let className: string;
-    
-    switch (status) {
-      case 'synced':
-        icon = '🟢';
-        text = bpm ? `Synced to DAW (${Math.round(bpm)} BPM)` : 'Synced to DAW';
-        className = 'clock-status synced';
-        break;
-      case 'free':
-        icon = '🟡';
-        text = 'Free Running';
-        className = 'clock-status free';
-        break;
-      case 'stopped':
-        icon = '🔴';
-        text = 'Stopped';
-        className = 'clock-status stopped';
-        break;
+
+    // Special handling for 'off' source
+    if (source === 'off') {
+      icon = '🔴';
+      text = 'Stopped (Clock Disabled)';
+      className = 'clock-status stopped';
+    } else {
+      switch (status) {
+        case 'synced':
+          icon = '🟢';
+          {
+            const bpmText = bpm && bpm > 0 ? ` (${Math.round(bpm)} BPM)` : '';
+            text = source === 'internal'
+              ? `Internal Clock${bpmText}`
+              : `Synced to DAW${bpmText}`;
+          }
+          className = 'clock-status synced';
+          break;
+        case 'free':
+          icon = '🟡';
+          text = 'Free Running';
+          className = 'clock-status free';
+          break;
+        case 'stopped':
+          icon = '🔴';
+          text = 'Stopped';
+          className = 'clock-status stopped';
+          break;
+      }
     }
     
     // Update text content (excluding beat indicator)
@@ -935,6 +951,42 @@ export class UIController {
    */
   onVelocityChange(handler: (velocity: number) => void): void {
     this.onVelocityChangeHandlers.push(handler);
+  }
+
+  /**
+   * Listen for clock source selection changes
+   */
+  onClockSourceChange(handler: (source: string) => void): void {
+    const clockSourceSelect = document.getElementById('clock-source') as HTMLSelectElement;
+    if (!clockSourceSelect) return;
+    clockSourceSelect.addEventListener('change', () => {
+      handler(clockSourceSelect.value);
+    });
+  }
+
+  /**
+   * Listen for internal BPM changes
+   */
+  onInternalBPMChange(handler: (bpm: number) => void): void {
+    const internalBPMInput = document.getElementById('internal-bpm') as HTMLInputElement;
+    if (!internalBPMInput) return;
+    internalBPMInput.addEventListener('change', () => {
+      const bpm = parseInt(internalBPMInput.value);
+      if (!isNaN(bpm)) {
+        handler(bpm);
+      }
+    });
+  }
+
+  /**
+   * Listen for internal clock toggle button clicks
+   */
+  onInternalClockToggle(handler: () => void): void {
+    const toggleButton = document.getElementById('internal-clock-toggle');
+    if (!toggleButton) return;
+    toggleButton.addEventListener('click', () => {
+      handler();
+    });
   }
 
   /**
