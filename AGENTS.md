@@ -1,65 +1,61 @@
 # Agent Onboarding Guide
 
-This guide is for AI agents working in this repository. It blends the README/CLAUDE guidance with actionable steps for a cloud terminal environment so you can ramp up quickly.
+This is a fast ramp-up for AI agents collaborating on kb2midi in a cloud terminal. It blends the README and CLAUDE docs with extra guardrails for day-1 productivity.
 
 ## Project Snapshot
-- **App:** kb2midi — web + Electron MIDI controller turning QWERTY input into real MIDI output.
-- **Primary Stack:** TypeScript + Vite front end (`src/`), Electron wrapper (`electron/`), tests with Vitest/Playwright.
-- **Entry Points:** `src/main.ts` wires UI + MIDI modules; `electron/main.cjs` boots the desktop shell; `index.html` + `styles.css` are the static shell.
+- **App:** kb2midi — Web + Electron MIDI controller turning QWERTY input into real MIDI.
+- **Stack:** TypeScript + Vite (web), Electron wrapper, Vitest + Playwright tests.
+- **Primary entry points:**
+  - `src/main.ts` bootstraps `MIDIController` and wires modules.
+  - `electron/main.cjs` launches the desktop shell; `electron/preload.cjs` exposes safe IPC.
+  - `index.html` + `styles.css` host the Vite app shell.
 
 ## Where Things Live
-- `src/` core logic:
-  - `midi-engine.ts` MIDI I/O, device selection, message send/receive.
-  - `keyboard-input.ts` QWERTY mapping, latch, modifiers.
-  - `clock-sync.ts` external clock handling and BPM events.
-  - `arpeggiator.ts` patterns, swing/shuffle, humanization, ratcheting.
-  - `scale-filter.ts` scale definitions and note filtering.
-  - `ui-controller.ts` DOM wiring and visual feedback.
-- `tests/` Vitest unit tests + Playwright E2E; `tests/mocks/web-midi.mock.ts` is the MIDI mock.
-- `electron/` desktop main + preload.
-- Build configs: `vite.config.ts`, `tsconfig.json`, `playwright.config.ts`.
+- `src/midi-engine.ts` — Web MIDI access, port selection, note/CC send + receive.
+- `src/keyboard-input.ts` — QWERTY mapping, latch mode, modifier handling, layout-aware hotkeys.
+- `src/clock-sync.ts` — External MIDI clock handling and BPM event emission.
+- `src/arpeggiator.ts` — Patterns, swing/shuffle, ratcheting, humanization, gate/velocity tweaks.
+- `src/scale-filter.ts` — Scale definitions, filtering, and piano highlighting.
+- `src/ui-controller.ts` — DOM wiring, visual feedback, and state binding.
+- `tests/` — Vitest unit suites + Playwright E2E; `tests/mocks/web-midi.mock.ts` is the MIDI mock.
+- `electron/` — Desktop main + preload, packaging scripts, and E2E configs.
+- Config: `vite.config.ts`, `tsconfig.json`, `playwright.config.ts`, `package.json` scripts.
 
-## Fast Start (cloud shell)
-1. `npm install`
-2. Web dev server: `npm run dev` (Vite on :8080).
-3. Type checks/build: `npm run type-check`, `npm run build`.
-4. Electron dev: `npm run electron-serve` (starts Vite + Electron). Use `npm run electron-dev` if Vite already running.
-5. Tests:
-   - Unit: `npm run test`, watch: `npm run test:watch`.
-   - Coverage: `npm run test:coverage`.
-   - E2E: `npm run test:e2e` (headless), variants in CLAUDE.md.
+## Day-1 Checklist (cloud shell)
+1. Install deps: `npm install` (already vendored `node_modules/` may exist, but refresh if uncertain).
+2. Sync with `main` before edits: `git fetch origin && git checkout work && git merge origin/main` (or `git merge main` if main is local).
+3. Web dev server: `npm run dev` (Vite on :8080). Preview build: `npm run preview`.
+4. Type/compile: `npm run type-check`, `npm run build`.
+5. Electron dev: `npm run electron-serve` (starts Vite + Electron). Use `npm run electron-dev` if Vite already running.
+6. Tests: unit `npm run test`, watch `npm run test:watch`, coverage `npm run test:coverage`, E2E `npm run test:e2e` or variants in CLAUDE.md.
 
 ## Coding Conventions
-- TypeScript strict, avoid `any`; prefer explicit types and `const`.
-- 2-space indent; ~100–120 char soft wrap.
-- Files kebab-case; classes/interfaces PascalCase; functions/vars camelCase; constants UPPER_SNAKE_CASE.
-- No try/catch wrapping imports. Keep diffs focused; avoid sweeping refactors or dependency churn.
+- TypeScript strict; avoid `any`. Prefer explicit types and `const`.
+- 2-space indent; keep lines ~100–120 chars.
+- Naming: files kebab-case; classes/interfaces PascalCase; functions/vars camelCase; constants UPPER_SNAKE_CASE.
+- Keep diffs focused; avoid sweeping refactors or dependency churn.
+- Never wrap imports in try/catch. Handle errors near their source with clear messaging.
 
-## Feature Priorities
-1. User-facing functionality: arpeggiator improvements, MIDI robustness (clock sync, hot-plug), UI polish/layouts.
-2. Bug fixes affecting MIDI correctness, latency, or stability.
-3. Packaging/signing and tooling follow after core feature/bug work.
+## Workflow Priorities
+1. User-facing correctness: MIDI stability (clock sync, hot-plug), arpeggiator timing, UI feedback.
+2. Bugs affecting MIDI accuracy, latency, or state consistency.
+3. Packaging, signing, and tooling improvements after core fixes.
 
-## Testing & Verification Tips
-- Use the Web MIDI mock for unit tests; see `tests/mocks/web-midi.mock.ts` usage examples in CLAUDE.md.
-- Manual sanity: run `npm run dev`, connect a virtual MIDI port, verify note on/off, sustain, octave shifts, arpeggiator timing, clock sync indicators.
-- For Electron: `npm run electron-dev`; check window creation, tray/menu, Always on Top, MIDI access.
-- Supported browsers: Chrome/Chromium, Safari, Edge. Firefox not supported (Web MIDI limits).
-
-## Git & PR Hygiene
-- Commits: short, imperative, scoped (e.g., `arp: smooth swing timing`).
-- Before committing: run relevant checks (`npm run type-check`, targeted tests). Keep patches small and reviewable.
-- PR message should state what/why and testing performed; include platform info and screenshots/GIFs for UI changes.
-
-## Cloud-Agent Workflow Hints
-- Stay within repo root; instructions apply globally (no nested AGENTS files).
-- Use `rg` for search (avoid `ls -R`/`grep -R`).
-- Keep environment noise low: avoid installing heavy deps unless required.
-- When editing styles or UI, consider Playwright screenshot if change is visual (see system instructions).
-- Do not commit secrets; keep dev URLs aligned (Vite/Electron expect :8080).
+## Testing & Verification
+- Unit tests rely on `tests/mocks/web-midi.mock.ts`; see usage in `tests/setup.ts` and CLAUDE.md.
+- Manual sanity: run `npm run dev`, connect a virtual MIDI port, verify note on/off, sustain, octave shifts, arpeggiator timing, and clock indicator behavior.
+- Electron: `npm run electron-dev`; confirm window creation, tray/menu, MIDI access, suspend/resume handling.
+- Browser support: Chrome/Chromium, Safari, Edge. Firefox unsupported (Web MIDI limits).
 
 ## Troubleshooting Reminders
-- No MIDI? ensure virtual port exists and browser allowed MIDI permission.
-- Clock issues? verify DAW clock routed to same port and selected in-app.
-- Arp silent? enable toggle, hold notes, ensure clock running and beat indicator green.
+- No MIDI? Ensure a virtual port exists and browser granted MIDI permissions.
+- Clock issues? Route DAW clock to the selected clock port and verify the in-app selector.
+- Arp silent? Enable the arpeggiator toggle, hold notes, ensure clock is running and beat indicator is active.
 - No sound overall? kb2midi outputs MIDI only—load an instrument in the DAW and match channels.
+
+## Git & PR Hygiene
+- Branch: work off `work`, but merge `main` first to avoid conflicts.
+- Commits: short, imperative (e.g., `arp: fix swing timing clamp`).
+- Before committing: run relevant checks (`npm run type-check`, targeted tests/E2E if affected). Keep patches small and reviewable.
+- PR message: state what/why and testing performed; include platform info and screenshots/GIFs for UI changes when applicable.
+
