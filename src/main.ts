@@ -791,15 +791,17 @@ class MIDIController {
    */
   private handleSustainOff(): void {
     if (!this.state.sustainPedalActive) return;
-    
+
     this.state.sustainPedalActive = false;
     const channel = this.uiController.getMidiChannel();
     this.midiEngine.setSustainPedal(false, channel);
     this.uiController.updateKeyVisual('Space', false);
-    
-    // Release all sustained notes
+
+    // Release all sustained notes on the channel they were originally played on
     this.state.sustainedNotes.forEach(note => {
-      this.midiEngine.stopNote(note, 0, channel);
+      const activeNote = this.state.activeNotes.get(note.toString());
+      const ch = activeNote?.channel ?? channel;
+      this.midiEngine.stopNote(note, 0, ch);
       this.state.activeNotes.delete(note.toString());
       this.uiController.updatePianoKey(note, false);
     });
