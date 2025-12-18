@@ -27,6 +27,7 @@ describe('ClockSync', () => {
       expect(state.ticks).toBe(0);
       expect(state.bpm).toBe(120);
       expect(state.status).toBe('stopped');
+      expect(state.source).toBe('external');
     });
 
     it('should have initial BPM of 120', () => {
@@ -35,6 +36,10 @@ describe('ClockSync', () => {
 
     it('should not be running initially', () => {
       expect(clockSync.isRunning()).toBe(false);
+    });
+
+    it('should default to external clock source', () => {
+      expect(clockSync.getClockSource()).toBe('external');
     });
   });
 
@@ -376,6 +381,175 @@ describe('ClockSync', () => {
     });
   });
 
+  describe('Clock Source Management', () => {
+    it('should switch from external to internal clock source', () => {
+      clockSync.setClockSource('internal');
+
+      expect(clockSync.getClockSource()).toBe('internal');
+    });
+
+    it('should switch from external to off', () => {
+      clockSync.setClockSource('off');
+
+      expect(clockSync.getClockSource()).toBe('off');
+    });
+
+    it('should ignore external clock when source is internal', () => {
+      clockSync.setClockSource('internal');
+      clockSync.onMIDIClockTick(100);
+
+      // External clock should be ignored
+      expect(clockSync.getTicks()).toBe(0);
+    });
+
+    it('should ignore external clock when source is off', () => {
+      clockSync.setClockSource('off');
+      clockSync.onMIDIClockTick(100);
+
+      // External clock should be ignored
+      expect(clockSync.getTicks()).toBe(0);
+    });
+
+    it('should stop internal clock when switching to external', () => {
+      clockSync.setClockSource('internal');
+      clockSync.startInternalClock();
+
+      expect(clockSync.isRunning()).toBe(true);
+
+      clockSync.setClockSource('external');
+
+      expect(clockSync.isRunning()).toBe(false);
+    });
+
+    it('should stop external clock when switching to internal', () => {
+      clockSync.onMIDIStart();
+      expect(clockSync.isRunning()).toBe(true);
+
+      clockSync.setClockSource('internal');
+
+      expect(clockSync.isRunning()).toBe(false);
+    });
+  });
+
+  describe('Internal Clock Control', () => {
+    beforeEach(() => {
+      clockSync.setClockSource('internal');
+    });
+
+    it('should start internal clock', () => {
+      clockSync.startInternalClock();
+
+      expect(clockSync.isRunning()).toBe(true);
+    });
+
+    it('should stop internal clock', () => {
+      clockSync.startInternalClock();
+      clockSync.stopInternalClock();
+
+      expect(clockSync.isRunning()).toBe(false);
+    });
+
+    it('should set internal BPM', () => {
+      clockSync.setInternalBPM(140);
+
+      expect(clockSync.getInternalBPM()).toBe(140);
+      expect(clockSync.getBPM()).toBe(140);
+    });
+
+    it('should generate ticks from internal clock', () => {
+      const tickCallback = vi.fn();
+      clockSync.onTick(tickCallback);
+
+      clockSync.startInternalClock();
+      vi.advanceTimersByTime(1000);
+
+      expect(tickCallback).toHaveBeenCalled();
+    });
+
+    it('should generate quarter note events from internal clock', () => {
+      const quarterCallback = vi.fn();
+      clockSync.onQuarterNote(quarterCallback);
+
+      clockSync.startInternalClock();
+      vi.advanceTimersByTime(1000);
+
+      expect(quarterCallback).toHaveBeenCalled();
+    });
+
+    it('should warn when starting internal clock with wrong source', () => {
+      clockSync.setClockSource('external');
+
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      clockSync.startInternalClock();
+
+      expect(consoleSpy).toHaveBeenCalled();
+      expect(clockSync.isRunning()).toBe(false);
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should warn when stopping internal clock with wrong source', () => {
+      clockSync.setClockSource('external');
+
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      clockSync.stopInternalClock();
+
+      expect(consoleSpy).toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should trigger start callbacks from internal clock', () => {
+      const startCallback = vi.fn();
+      clockSync.onStart(startCallback);
+
+      clockSync.startInternalClock();
+
+      expect(startCallback).toHaveBeenCalled();
+    });
+
+    it('should trigger stop callbacks from internal clock', () => {
+      const stopCallback = vi.fn();
+      clockSync.onStop(stopCallback);
+
+      clockSync.startInternalClock();
+      clockSync.stopInternalClock();
+
+      expect(stopCallback).toHaveBeenCalled();
+    });
+  });
+
+  describe('Clock Source Switching During Playback', () => {
+    it('should transition from external to internal while running', () => {
+      clockSync.onMIDIStart();
+      expect(clockSync.isRunning()).toBe(true);
+
+      clockSync.setClockSource('internal');
+      expect(clockSync.isRunning()).toBe(false);
+
+      clockSync.startInternalClock();
+      expect(clockSync.isRunning()).toBe(true);
+    });
+
+    it('should maintain BPM when switching sources', () => {
+      // Set external clock to 140 BPM
+      let time = 0;
+      for (let i = 0; i < 10; i++) {
+        clockSync.onMIDIClockTick(time);
+        time += 17.86; // 140 BPM
+      }
+
+      const externalBPM = clockSync.getBPM();
+
+      // Switch to internal and set same BPM
+      clockSync.setClockSource('internal');
+      clockSync.setInternalBPM(140);
+
+      expect(clockSync.getBPM()).toBe(140);
+      expect(Math.abs(clockSync.getBPM() - externalBPM)).toBeLessThan(10);
+    });
+  });
+
   describe('Edge Cases', () => {
     it('should handle extremely fast tempos', () => {
       // 300 BPM: each tick ~8.33ms
@@ -411,6 +585,16 @@ describe('ClockSync', () => {
 
       const ticks = clockSync.getTicks();
       expect(ticks).toBeGreaterThan(0);
+    });
+
+    it('should handle rapid source switching', () => {
+      for (let i = 0; i < 10; i++) {
+        clockSync.setClockSource('internal');
+        clockSync.setClockSource('external');
+      }
+
+      expect(clockSync.getClockSource()).toBe('external');
+      expect(clockSync.isRunning()).toBe(false);
     });
   });
 });
