@@ -5,6 +5,7 @@
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
+    "setup": "ELECTRON_SKIP_BINARY_DOWNLOAD=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install",
     "start": "npm run build && vite preview",
     "dev": "vite",
     "dev:electron": "ELECTRON=1 vite",

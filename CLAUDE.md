@@ -6,6 +6,61 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 kb2midi is a TypeScript-based web MIDI controller that transforms QWERTY keyboards into professional MIDI input devices. The application supports both web browser and Electron desktop deployment, featuring advanced capabilities including arpeggiator, clock sync, scale filtering, external MIDI input routing, and multiple keyboard layouts.
 
+## Cloud/CI Quick Start
+
+**Lightweight setup** — skips ~300MB of Electron/Playwright binaries:
+
+```bash
+npm run setup         # Fast install WITHOUT binaries (~5s vs ~60s)
+npm run type-check    # Verify TypeScript compiles
+npm run build         # Full production build
+npm run test          # Unit tests (no browser binaries needed)
+```
+
+**Full install** (when you need Electron or E2E tests):
+```bash
+npm install                    # Includes Electron binary
+npx playwright install         # Download Playwright browsers
+npm run test:e2e               # E2E tests
+npm run electron-serve         # Launch Electron app
+```
+
+### Day-1 Checklist
+
+1. `npm run setup` — lightweight install
+2. `git fetch origin && git merge origin/main` — sync before edits
+3. `npm run type-check` — verify compilation
+4. `npm run test` — run unit tests
+5. `npm run dev` — start dev server on :8080 (if needed)
+
+### Quick File Reference
+
+| Path | Purpose |
+|------|---------|
+| `src/main.ts` | Bootstraps `MIDIController`, wires all modules |
+| `src/midi-engine.ts` | Web MIDI access, port selection, note/CC send/receive |
+| `src/keyboard-input.ts` | QWERTY mapping, latch mode, layout hotkeys |
+| `src/arpeggiator.ts` | Patterns, swing/shuffle, ratcheting, humanization |
+| `src/clock-sync.ts` | External MIDI clock handling, BPM events |
+| `src/scale-filter.ts` | Scale definitions, filtering, piano highlighting |
+| `src/ui-controller.ts` | DOM wiring, visual feedback, state binding |
+| `tests/mocks/web-midi.mock.ts` | MIDI mock for unit tests |
+
+### Workflow Priorities
+
+1. **User-facing correctness**: MIDI stability, arpeggiator timing, UI feedback
+2. **Bugs** affecting MIDI accuracy, latency, or state consistency
+3. **Packaging/tooling** after core fixes
+
+### Troubleshooting Quick Reference
+
+| Symptom | Check |
+|---------|-------|
+| No MIDI ports | Create virtual MIDI port (IAC/loopMIDI), grant browser permissions |
+| Clock not syncing | Route DAW clock to selected clock port, verify in-app selector |
+| Arpeggiator silent | Enable toggle, hold notes, confirm clock running + beat indicator |
+| No sound | kb2midi outputs MIDI only—load instrument in DAW, match channels |
+
 ## Development Commands
 
 ### Web Development
