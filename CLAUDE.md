@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-kb2midi is a TypeScript-based web MIDI controller that transforms QWERTY keyboards into professional MIDI input devices. The application supports both web browser and Electron desktop deployment, featuring advanced capabilities including arpeggiator, clock sync, and multiple keyboard layouts.
+kb2midi is a TypeScript-based web MIDI controller that transforms QWERTY keyboards into professional MIDI input devices. The application supports both web browser and Electron desktop deployment, featuring advanced capabilities including arpeggiator, clock sync, scale filtering, external MIDI input routing, and multiple keyboard layouts.
 
 ## Development Commands
 
@@ -16,25 +16,52 @@ npm run preview       # Preview production build
 npm run type-check    # TypeScript type checking without output
 ```
 
+### Testing
+```bash
+# Unit Tests (Vitest)
+npm run test              # Run unit tests once
+npm run test:watch        # Run unit tests in watch mode
+npm run test:ui           # Run tests with Vitest UI
+npm run test:coverage     # Run tests with code coverage
+
+# E2E Tests (Playwright)
+npm run test:e2e          # Run all E2E tests
+npm run test:e2e:ui       # Run E2E tests with Playwright UI
+npm run test:e2e:headed   # Run E2E tests in headed mode (visible browser)
+npm run test:e2e:debug    # Run E2E tests in debug mode
+npm run test:e2e:chromium # Run E2E tests on Chromium only
+npm run test:e2e:webkit   # Run E2E tests on WebKit only
+npm run test:e2e:electron # Run E2E tests for Electron
+
+# All Tests
+npm run test:all          # Run both unit and E2E tests
+```
+
 ### Electron Desktop App
 ```bash
-npm run electron         # Run Electron with production build
-npm run electron-dev     # Run Electron in development mode
-npm run electron-build   # Build Electron distributables (use EB_ARGS to customize)
-npm run electron-pack    # Build universal macOS DMG
+npm run electron              # Run Electron with production build
+npm run electron-dev          # Run Electron in development mode
+npm run electron-serve        # Start dev server + Electron (recommended for development)
+npm run electron-serve-devtools  # Same as above with DevTools auto-open
+npm run electron-preview      # Build and preview in Electron
+npm run electron-build        # Build Electron distributables (use EB_ARGS to customize)
 ```
 
 ### Platform-Specific Packaging
 ```bash
-npm run electron-pack-mac-arm64 # macOS Apple Silicon (arm64) DMG
-npm run electron-pack-win      # Windows NSIS installer
-npm run electron-pack-all      # Build for both macOS and Windows
+npm run electron-pack-mac-universal  # macOS Universal (Intel + Apple Silicon) DMG
+npm run electron-pack-mac-arm64      # macOS Apple Silicon (arm64) DMG
+npm run electron-pack-win            # Windows NSIS installer
+npm run electron-pack-linux          # Linux AppImage
+npm run electron-pack-all            # Build for all platforms
+npm run electron-pack-mas            # Mac App Store (universal)
+npm run electron-pack-mas-arm64      # Mac App Store (arm64)
 ```
 
 ### Legacy/Alternative Serving
 ```bash
-npm start            # Vite preview mode
-npm run serve        # http-server fallback for dist/
+npm start            # Build + Vite preview mode
+npm run serve        # Build + http-server fallback for dist/
 ```
 
 ## Architecture
@@ -45,17 +72,45 @@ The application follows a modular TypeScript architecture with clear separation 
 
 **src/main.ts** - Main orchestrator class (`MIDIController`) that coordinates all modules and manages application lifecycle. Handles initialization, event routing, and cleanup.
 
-**src/midi-engine.ts** - Core MIDI communication layer (`MIDIEngine`) managing Web MIDI API connections, device selection, and message sending/receiving.
+**src/midi-engine.ts** - Core MIDI communication layer (`MIDIEngine`) managing Web MIDI API connections, device selection, and message sending/receiving. Supports both clock input and separate note input devices.
 
-**src/keyboard-input.ts** - Keyboard event handling (`KeyboardInput`) with layout-aware key mapping, special key registration, and event filtering.
+**src/keyboard-input.ts** - Keyboard event handling (`KeyboardInput`) with layout-aware key mapping, special key registration, latch mode, and event filtering.
 
-**src/ui-controller.ts** - UI state management (`UIController`) handling DOM manipulation, visual feedback, and user interactions.
+**src/ui-controller.ts** - UI state management (`UIController`) handling DOM manipulation, visual feedback, scale highlighting, and user interactions.
 
 **src/clock-sync.ts** - External MIDI clock synchronization (`ClockSync`) for timing-critical features like arpeggiator.
 
-**src/arpeggiator.ts** - Advanced arpeggiator engine (`Arpeggiator`) with multiple patterns, swing, gate, and clock sync.
+**src/arpeggiator.ts** - Advanced arpeggiator engine (`Arpeggiator`) with multiple patterns, timing strategies, generative features, and clock sync.
+
+**src/scale-filter.ts** - Scale filtering system (`ScaleFilter`) providing musical scale definitions, note validation, and scale-aware input filtering.
 
 **src/types.ts** - Complete TypeScript type definitions for MIDI messages, state objects, and interfaces.
+
+### Test Infrastructure
+
+**tests/setup.ts** - Vitest setup file that installs the Web MIDI API mock and configures test environment globals.
+
+**tests/mocks/web-midi.mock.ts** - Comprehensive mock implementation of the Web MIDI API including:
+- `MockMIDIInput` / `MockMIDIOutput` - Mock MIDI port classes
+- `MockMIDIAccess` - Mock MIDI access object with device management
+- Helper methods for simulating MIDI messages (clock ticks, note events)
+
+**tests/unit/** - Unit tests for individual modules:
+- `arpeggiator.test.ts` - Arpeggiator patterns and timing tests
+- `clock-sync.test.ts` - Clock synchronization tests
+- `keyboard-input.test.ts` - Keyboard input handling tests
+- `midi-engine.test.ts` - MIDI engine functionality tests
+- `external-midi-input.test.ts` - External MIDI input routing tests
+
+**tests/e2e/** - End-to-end tests:
+- `web-app.test.ts` - Browser-based E2E tests
+- `electron.test.ts` - Electron application E2E tests
+
+### Electron Files
+
+**electron/main.cjs** - Electron main process handling window creation, system events, and IPC.
+
+**electron/preload.cjs** - Preload script providing secure contextBridge for renderer-to-main communication.
 
 ### Key Architectural Patterns
 
@@ -69,6 +124,8 @@ The application follows a modular TypeScript architecture with clear separation 
 
 **Clock Sync Integration**: External MIDI clock drives arpeggiator timing and UI beat indicators.
 
+**Input Source Separation**: Note input (keyboard or external MIDI) is independent from clock input, allowing flexible routing configurations.
+
 ### TypeScript Configuration
 
 - **Module System**: ES6 modules with Vite bundling
@@ -77,15 +134,17 @@ The application follows a modular TypeScript architecture with clear separation 
 - **Build Target**: Modern browsers supporting Web MIDI API
 - **Path Aliases**: `@/*` maps to `src/*` for cleaner imports
 - **Code Style**: 2-space indentation, 100-120 char line length, avoid `any` types
+- **Strict Null Checks**: Enabled along with all strict mode options
 
 ### Electron Integration
 
-- **Multi-Platform**: Supports macOS (Intel/Apple Silicon), Windows, and Linux
+- **Multi-Platform**: Supports macOS (Intel/Apple Silicon/Universal), Windows, and Linux
 - **Native Features**: System suspend/resume handling, app focus/blur events
 - **Power Management**: Automatic cleanup on system suspend, resume on system wake
 - **Application Lifecycle**: Handles app focus/blur with MIDI state management and note panic
 - **Security**: Sandboxed renderer with secure preload script for MIDI access
 - **IPC Bridge**: Secure communication for system events via contextBridge
+- **Mac App Store**: MAS build support with proper entitlements
 
 ## Key Technical Details
 
@@ -101,10 +160,24 @@ Note offsets are layout-specific mappings from keyboard keys to semitone positio
 - **Octave Controls**: Layout-specific keys for octave shifting
   - **Expanded Layout**: ArrowLeft (down), ArrowRight (up)
   - **Simple Layout**: Z (down), X (up)
-- **Expression Controls**: 
+- **Expression Controls**:
   - ArrowUp: Momentary Mod Wheel (CC1) with visual feedback
   - ArrowDown: Momentary Pitch Bend Down with visual feedback
   - Space: Sustain pedal
+  - Tab: Momentary arpeggiator rate boost (2x)
+
+### Note Input Sources
+- **QWERTY Keyboard**: Default input using computer keyboard
+- **External MIDI**: Route notes from external MIDI controllers
+- **Independent Routing**: Note input separate from clock input for flexible setups
+- **Hot-swap**: Switch between sources without stopping playback
+
+### Scale Filter
+- **16 Scale Types**: Chromatic, Major/Minor modes, Pentatonic, Blues, Whole Tone, Diminished, Augmented
+- **Root Note Selection**: Any of 12 chromatic notes as scale root
+- **Visual Highlighting**: Scale notes highlighted on piano display
+- **Note Filtering**: Non-scale notes blocked from playback when enabled
+- **Integration**: Works with both keyboard and arpeggiator
 
 ### Arpeggiator Engine
 - **Clock Sync**: Integrates with external MIDI clock for perfect timing synchronization
@@ -130,7 +203,7 @@ Note offsets are layout-specific mappings from keyboard keys to semitone positio
 - **Input Selection**: Auto-detection of best MIDI clock source with manual override via Clock Input dropdown
 - **Smart Input Prioritization**: Prefers inputs matching output device names, then common virtual MIDI devices (IAC, loopMIDI), then first available
 - **Resilient Clock Detection**: Auto-starts on first MIDI clock tick (0xF8) even without explicit Start/Continue messages
-- **Stop Timeout**: 500ms timeout to detect clock停止 when no more ticks received
+- **Stop Timeout**: 500ms timeout to detect clock stop when no more ticks received
 - **Hot-plug Support**: Dynamic device list updates with automatic fallback when selected devices disconnect
 - **BPM Detection**: Real-time tempo analysis from incoming MIDI clock messages
 - **Beat Indicators**: Visual feedback synchronized to quarter note pulses
@@ -156,6 +229,7 @@ The Web MIDI API cannot create MIDI devices visible to other applications. Users
 - **Dynamic Discovery**: Automatically detects new MIDI devices and removes disconnected ones
 - **Smart Fallback**: Auto-switches to best available device when selected device disconnects
 - **UI Synchronization**: Updates device dropdowns in real-time without user intervention
+- **Note Input Fallback**: Reverts to keyboard mode if external MIDI device disconnects
 
 ### Arpeggiator Timing Implementation
 
@@ -189,17 +263,75 @@ The timing system uses a simple strategy pattern with `setTimeout` scheduling:
 - No premature optimization (no measurable benefit from complex scheduling)
 - Seeded PRNG allows creative repeatability (change seed for variation)
 
-## Testing Approach
+## Testing
 
-No formal test framework is configured. Testing is performed by:
-1. **Web Testing**: `npm run dev` + virtual MIDI port connection, verify note on/off, sustain, octave controls, arpeggiator, and clock sync
-2. **Electron Testing**: `npm run electron-dev`, confirm window behavior, "Always on Top" functionality, and MIDI access
-3. **MIDI Verification**: Use DAW software or MIDI monitor applications to validate output
-4. **Console Monitoring**: Check browser/Electron console for errors during testing
-5. **Cross-platform testing**: macOS, Windows, and Linux compatibility
-6. **Browser compatibility**: Chrome, Safari, Edge (Firefox not supported)
-7. **Power management**: Suspend/resume, focus/blur scenarios
-8. **Device hot-plug**: Connect/disconnect during operation
+### Test Framework Stack
+- **Unit Tests**: Vitest with jsdom environment
+- **E2E Tests**: Playwright for cross-browser and Electron testing
+- **Mocking**: Comprehensive Web MIDI API mock for unit tests
+- **Coverage**: V8 coverage provider with text, JSON, and HTML reporters
+
+### Writing Tests
+
+**Unit Tests**: Place in `tests/unit/` directory with `.test.ts` extension
+```typescript
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { setupWebMIDIMock, MockMIDIAccess } from '../mocks/web-midi.mock';
+
+describe('Feature', () => {
+  let mockAccess: MockMIDIAccess;
+
+  beforeEach(async () => {
+    mockAccess = setupWebMIDIMock();
+    // Setup code
+  });
+
+  it('should do something', () => {
+    expect(result).toBe(expected);
+  });
+});
+```
+
+**E2E Tests**: Place in `tests/e2e/` directory
+```typescript
+import { test, expect } from '@playwright/test';
+
+test('feature works', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#element')).toBeVisible();
+});
+```
+
+### Web MIDI Mock Usage
+```typescript
+import { setupWebMIDIMock, MockMIDIAccess, MockMIDIInput } from '../mocks/web-midi.mock';
+
+// Setup mock
+const mockAccess = setupWebMIDIMock();
+
+// Add/remove mock devices
+mockAccess.addInput('id', 'Device Name', 'Manufacturer');
+mockAccess.removeInput('id');
+
+// Simulate MIDI messages
+const input = mockAccess.inputs.get('mock-input-1') as MockMIDIInput;
+input.simulateClockTick();     // 0xF8
+input.simulateClockStart();    // 0xFA
+input.simulateClockStop();     // 0xFC
+input.simulateMessage([0x90, 60, 100]); // Note on C4
+
+// Check output messages
+const output = mockAccess.outputs.get('mock-output-1') as MockMIDIOutput;
+output.getSentMessages();      // Array of sent MIDI messages
+output.wasMessageSent([0x90, 60, 100]); // Check specific message
+```
+
+### Testing Best Practices
+1. **Isolate tests**: Each test should be independent and not rely on state from other tests
+2. **Mock external dependencies**: Use the provided Web MIDI mock for MIDI-related tests
+3. **Test behavior, not implementation**: Focus on what the code does, not how it does it
+4. **Use descriptive test names**: Clearly describe what is being tested
+5. **Run tests before committing**: Use `npm run test` and `npm run test:e2e` to validate changes
 
 ## Build System
 
@@ -208,7 +340,7 @@ No formal test framework is configured. Testing is performed by:
 - **Electron Builder**: Cross-platform desktop app packaging with code signing support
 - **Universal Binaries**: macOS builds support both Intel and Apple Silicon architectures
 - **Source Maps**: Generated for debugging production builds
-- **Output Directories**: `dist/` for web builds, `release/` for packaged desktop apps
+- **Output Directories**: `dist/` for web builds, `release/` for packaged desktop apps, `test-results/` for test reports
 - **Type Checking**: Run `npm run type-check` before commits to ensure strict TypeScript compliance
 
 ## Browser Compatibility
@@ -216,3 +348,25 @@ No formal test framework is configured. Testing is performed by:
 - **Supported**: Chrome, Safari, Edge (Web MIDI API required)
 - **Not Supported**: Firefox (limited Web MIDI API implementation)
 - **Mobile**: Limited support due to Web MIDI API availability
+
+## Code Conventions
+
+### File Organization
+- Source files in `src/` with one class per file
+- Test files mirror source structure in `tests/`
+- Electron-specific code in `electron/`
+- Build configuration files in project root
+
+### Naming Conventions
+- **Files**: kebab-case (`midi-engine.ts`, `clock-sync.ts`)
+- **Classes**: PascalCase (`MIDIController`, `ClockSync`)
+- **Interfaces**: PascalCase with descriptive names (`ControllerState`, `MIDIMessage`)
+- **Methods/Functions**: camelCase (`playNote`, `handleClockInputSelect`)
+- **Constants**: UPPER_SNAKE_CASE (`MIDI_NOTE_ON`, `MIDI_SUSTAIN_PEDAL`)
+
+### TypeScript Guidelines
+- Avoid `any` types - use proper typing or `unknown` with type guards
+- Export interfaces from `types.ts` for shared types
+- Use strict null checks - handle `null` and `undefined` explicitly
+- Prefer `const` over `let`, avoid `var`
+- Use optional chaining (`?.`) and nullish coalescing (`??`) where appropriate
