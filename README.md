@@ -184,6 +184,31 @@ npm run electron-pack-win            # Windows installer
 npm run electron-pack-linux          # Linux AppImage
 ```
 
+## CI and installation performance
+
+- Skip optional binaries when you only need type-checking, tests, or web builds:
+
+  ```bash
+  ELECTRON_SKIP_BINARY_DOWNLOAD=1 \
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+  npm ci
+  ```
+
+- Cache Playwright browsers in CI for faster e2e runs:
+
+  ```yaml
+  env:
+    PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+  steps:
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+    - run: npx playwright install --with-deps
+  ```
+
+- pnpm typically installs 2-3x faster than npm. If your environment has pnpm available, you can swap to `pnpm install` and `pnpm run build` in your local or CI workflows for quicker iterations.
+
 ## Troubleshooting
 
 ### No MIDI Output
