@@ -52,4 +52,6 @@
 - Web MIDI requires user permission and a virtual MIDI port (see README). Do not commit secrets.
 - macOS notarization for non‑MAS builds requires Apple credentials; see `ELECTRON.md` → Notarization.
 - Keep dev URLs aligned: Vite `8080`; Electron dev URL in `electron/main.cjs`.
- - MAS builds use `bundleVersion: ${version}`; bump `package.json` version for each MAS upload (see README/ELECTRON).
+- MAS builds use `bundleVersion: ${version}`; bump `package.json` version for each MAS upload (see README/ELECTRON).
+- Lean iterations on cloud runners: prefer `SKIP_ELECTRON_DOWNLOAD=1` and `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` when binaries
+  are unnecessary, and avoid global npm installs—use `npm ci --ignore-scripts` for doc-only edits or lint-only passes.

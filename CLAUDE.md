@@ -16,6 +16,13 @@ npm run preview       # Preview production build
 npm run type-check    # TypeScript type checking without output
 ```
 
+## Fast Iterations on Cloud Runners
+
+- Skip optional binaries when they are not needed for verification: set `SKIP_ELECTRON_DOWNLOAD=1` and
+  `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` before installs.
+- For documentation-only or lint-only edits, run `npm ci --ignore-scripts` to avoid heavyweight postinstall steps.
+- Keep installs local to the repo (no global npm installs) to ensure reproducible environments and avoid bloat.
+
 ### Testing
 ```bash
 # Unit Tests (Vitest)
