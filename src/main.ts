@@ -49,6 +49,9 @@ class MIDIController {
   private currentTimingType: 'straight' | 'swing' | 'shuffle' | 'dotted' = 'straight';
   private humanizeEnabled: boolean = false;
   private timingSeed: number = Math.random() * 1000000;
+  // Momentary controller channel tracking (for mod wheel and pitch bend)
+  private modWheelChannel: number | null = null;
+  private pitchBendChannel: number | null = null;
 
   private state: ControllerState = {
     currentOctave: 4,
@@ -325,13 +328,16 @@ class MIDIController {
     // Special actions for Mod Wheel (ArrowUp)
     this.keyboardInput.onSpecialKey('modOn', () => {
       const channel = this.uiController.getMidiChannel();
+      this.modWheelChannel = channel; // Store channel for release
       this.midiEngine.sendMessage({ type: 'cc', channel, controller: MIDI_MOD_WHEEL, value: 127 });
       this.uiController.updateModIndicator(true);
       this.uiController.updateKeyVisual('ArrowUp', true);
     });
     this.keyboardInput.onSpecialKey('modOff', () => {
-      const channel = this.uiController.getMidiChannel();
+      // Use stored channel, fallback to current if not tracked
+      const channel = this.modWheelChannel ?? this.uiController.getMidiChannel();
       this.midiEngine.sendMessage({ type: 'cc', channel, controller: MIDI_MOD_WHEEL, value: 0 });
+      this.modWheelChannel = null; // Clear tracking
       this.uiController.updateModIndicator(false);
       this.uiController.updateKeyVisual('ArrowUp', false);
     });
@@ -339,13 +345,16 @@ class MIDIController {
     // Special actions for Pitch Bend Down (ArrowDown)
     this.keyboardInput.onSpecialKey('pitchDownOn', () => {
       const channel = this.uiController.getMidiChannel();
+      this.pitchBendChannel = channel; // Store channel for release
       this.midiEngine.sendMessage({ type: 'pitchbend', channel, bend: -8192 });
       this.uiController.updatePitchIndicator(true);
       this.uiController.updateKeyVisual('ArrowDown', true);
     });
     this.keyboardInput.onSpecialKey('pitchDownOff', () => {
-      const channel = this.uiController.getMidiChannel();
+      // Use stored channel, fallback to current if not tracked
+      const channel = this.pitchBendChannel ?? this.uiController.getMidiChannel();
       this.midiEngine.sendMessage({ type: 'pitchbend', channel, bend: 0 });
+      this.pitchBendChannel = null; // Clear tracking
       this.uiController.updatePitchIndicator(false);
       this.uiController.updateKeyVisual('ArrowDown', false);
     });
@@ -791,15 +800,17 @@ class MIDIController {
    */
   private handleSustainOff(): void {
     if (!this.state.sustainPedalActive) return;
-    
+
     this.state.sustainPedalActive = false;
     const channel = this.uiController.getMidiChannel();
     this.midiEngine.setSustainPedal(false, channel);
     this.uiController.updateKeyVisual('Space', false);
-    
-    // Release all sustained notes
+
+    // Release all sustained notes on the channel they were originally played on
     this.state.sustainedNotes.forEach(note => {
-      this.midiEngine.stopNote(note, 0, channel);
+      const activeNote = this.state.activeNotes.get(note.toString());
+      const ch = activeNote?.channel ?? channel;
+      this.midiEngine.stopNote(note, 0, ch);
       this.state.activeNotes.delete(note.toString());
       this.uiController.updatePianoKey(note, false);
     });
@@ -1144,6 +1155,9 @@ class MIDIController {
     const channels = new Set<number>();
     channels.add(this.uiController.getMidiChannel());
     this.state.activeNotes.forEach(n => channels.add(n.channel ?? this.uiController.getMidiChannel()));
+    // Include channels where momentary controllers are active
+    if (this.modWheelChannel !== null) channels.add(this.modWheelChannel);
+    if (this.pitchBendChannel !== null) channels.add(this.pitchBendChannel);
     try {
       channels.forEach(ch => this.midiEngine.panic(ch));
     } catch {
@@ -1157,6 +1171,9 @@ class MIDIController {
         this.midiEngine.sendMessage({ type: 'cc', channel: ch, controller: MIDI_MOD_WHEEL, value: 0 });
         this.midiEngine.sendMessage({ type: 'pitchbend', channel: ch, bend: 0 });
       });
+      // Clear channel tracking after reset
+      this.modWheelChannel = null;
+      this.pitchBendChannel = null;
     } catch {
       // ignore
     }
