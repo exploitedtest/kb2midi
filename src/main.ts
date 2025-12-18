@@ -834,7 +834,8 @@ class MIDIController {
       this.arpeggiator.clearNotes();
       
       currentNotes.forEach(activeNote => {
-        this.midiEngine.playNote(activeNote.note, activeNote.velocity, this.uiController.getMidiChannel());
+        const ch = activeNote.channel ?? this.uiController.getMidiChannel();
+        this.midiEngine.playNote(activeNote.note, activeNote.velocity, ch);
       });
       
       this.uiController.updateStatus('Arpeggiator Disabled', 'info');
