@@ -170,8 +170,8 @@ export class MIDIEngine {
     // Final fallback to first available input
     chosen = chosen || inputs[0];
 
-    // If switching inputs, detach listener from previous one first to avoid duplicate ticks
-    if (this.state.midiInput && this.state.midiInput !== chosen) {
+    // Always detach the old listener before attaching to avoid duplicate ticks
+    if (this.state.midiInput) {
       try {
         this.state.midiInput.removeEventListener('midimessage', this.handleMIDIMessage as any);
       } catch {}
@@ -189,8 +189,11 @@ export class MIDIEngine {
    * Allows manual selection of MIDI clock input (e.g., from UI)
    */
   setInput(input: WebMidi.MIDIInput): void {
-    if (this.state.midiInput && this.state.midiInput !== input) {
-      this.state.midiInput.removeEventListener('midimessage', this.handleMIDIMessage as any);
+    // Detach any existing listener to prevent duplicate clock ticks on re-select
+    if (this.state.midiInput) {
+      try {
+        this.state.midiInput.removeEventListener('midimessage', this.handleMIDIMessage as any);
+      } catch {}
     }
     this.state.midiInput = input;
     this.state.midiInput.addEventListener('midimessage', this.handleMIDIMessage as any);

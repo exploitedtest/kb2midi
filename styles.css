@@ -4,15 +4,83 @@
     box-sizing: border-box;
 }
 
+:root {
+    color-scheme: light dark;
+    --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --text-color: #ffffff;
+    --text-muted: rgba(255, 255, 255, 0.8);
+    --panel-bg: rgba(255, 255, 255, 0.1);
+    --panel-bg-soft: rgba(255, 255, 255, 0.05);
+    --panel-border: rgba(255, 255, 255, 0.2);
+    --panel-border-strong: rgba(255, 255, 255, 0.3);
+    --control-bg: rgba(255, 255, 255, 0.2);
+    --control-border: rgba(255, 255, 255, 0.3);
+    --control-focus-bg: rgba(255, 255, 255, 0.3);
+    --button-bg: rgba(255, 255, 255, 0.2);
+    --button-border: rgba(255, 255, 255, 0.3);
+    --button-text: #ffffff;
+    --button-hover-bg: rgba(255, 255, 255, 0.3);
+    --piano-bg: rgba(0, 0, 0, 0.2);
+    --key-border: #ccc;
+    --white-key-bg: linear-gradient(to bottom, #fff, #f0f0f0);
+    --white-key-text: #333;
+    --black-key-bg: linear-gradient(to bottom, #333, #111);
+    --black-key-text: #fff;
+    --key-shadow: rgba(0, 0, 0, 0.2);
+    --keyboard-key-bg: rgba(255, 255, 255, 0.2);
+    --keyboard-white-bg: rgba(255, 255, 255, 0.3);
+    --keyboard-white-text: #333;
+    --keyboard-white-border: rgba(255, 255, 255, 0.5);
+    --keyboard-black-bg: rgba(0, 0, 0, 0.6);
+    --keyboard-black-text: #ffffff;
+    --keyboard-black-border: rgba(255, 255, 255, 0.3);
+    --instructions-code-bg: rgba(0, 0, 0, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-gradient: linear-gradient(135deg, #080600 0%, #1b1304 100%);
+        --text-color: #e0dbcf;
+        --text-muted: rgba(224, 219, 207, 0.75);
+        --panel-bg: rgba(0, 0, 0, 0.78);
+        --panel-bg-soft: rgba(0, 0, 0, 0.6);
+        --panel-border: rgba(224, 219, 207, 0.14);
+        --panel-border-strong: rgba(224, 219, 207, 0.22);
+        --control-bg: rgba(0, 0, 0, 0.7);
+        --control-border: rgba(224, 219, 207, 0.2);
+        --control-focus-bg: rgba(0, 0, 0, 0.92);
+        --button-bg: rgba(0, 0, 0, 0.7);
+        --button-border: rgba(224, 219, 207, 0.22);
+        --button-text: #e0dbcf;
+        --button-hover-bg: rgba(0, 0, 0, 0.95);
+        --piano-bg: rgba(255, 255, 255, 0.06);
+        --key-border: rgba(224, 219, 207, 0.2);
+        --white-key-bg: linear-gradient(to bottom, #000000, #110d08);
+        --white-key-text: #e0dbcf;
+        --black-key-bg: linear-gradient(to bottom, #9a9a9a, #b8b8b8);
+        --black-key-text: #000000;
+        --key-shadow: rgba(255, 255, 255, 0.2);
+        --keyboard-key-bg: rgba(224, 219, 207, 0.1);
+        --keyboard-white-bg: rgba(0, 0, 0, 0.8);
+        --keyboard-white-text: #e0dbcf;
+        --keyboard-white-border: rgba(224, 219, 207, 0.2);
+        --keyboard-black-bg: rgba(255, 255, 255, 0.7);
+        --keyboard-black-text: #000000;
+        --keyboard-black-border: rgba(0, 0, 0, 0.2);
+        --instructions-code-bg: rgba(255, 255, 255, 0.1);
+    }
+
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--bg-gradient);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
     padding: 20px;
-    color: white;
+    color: var(--text-color);
 }
 
 .header {
@@ -27,12 +95,12 @@ body {
 }
 
 .status {
-    background: rgba(255,255,255,0.1);
+    background: var(--panel-bg);
     padding: 10px 20px;
     border-radius: 25px;
     margin-bottom: 20px;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid var(--panel-border);
 }
 
 .status.connected {
@@ -46,12 +114,12 @@ body {
 }
 
 .clock-status {
-    background: rgba(255,255,255,0.1);
+    background: var(--panel-bg);
     padding: 8px 16px;
     border-radius: 20px;
     margin-bottom: 15px;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid var(--panel-border);
     font-size: 14px;
     font-weight: 500;
     text-align: center;
@@ -81,16 +149,16 @@ body {
     gap: 15px;
     margin-top: 15px;
     padding: 15px;
-    background: rgba(255,255,255,0.1);
+    background: var(--panel-bg);
     border-radius: 10px;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid var(--panel-border);
     flex-wrap: wrap;
     justify-content: center;
 }
 
 .arpeggiator-controls .control-group {
-    background: rgba(255,255,255,0.05);
+    background: var(--panel-bg-soft);
     padding: 10px;
     border-radius: 8px;
     min-width: 120px;
@@ -121,12 +189,12 @@ body {
 }
 
 .control-group {
-    background: rgba(255,255,255,0.1);
+    background: var(--panel-bg);
     padding: 15px;
     border-radius: 10px;
     backdrop-filter: blur(10px);
     text-align: center;
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid var(--panel-border);
 }
 
 .control-group label {
@@ -136,9 +204,9 @@ body {
 }
 
 .control-group input, .control-group select {
-    background: rgba(255,255,255,0.2);
-    border: 1px solid rgba(255,255,255,0.3);
-    color: white;
+    background: var(--control-bg);
+    border: 1px solid var(--control-border);
+    color: var(--text-color);
     padding: 8px 12px;
     border-radius: 5px;
     font-size: 14px;
@@ -148,8 +216,8 @@ body {
 .wheel-indicator {
     padding: 6px 10px;
     border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.3);
-    background: rgba(255,255,255,0.15);
+    border: 1px solid var(--control-border);
+    background: var(--control-bg);
     font-size: 12px;
     min-width: 48px;
     text-align: center;
@@ -164,12 +232,12 @@ body {
 }
 
 .piano-container {
-    background: rgba(0,0,0,0.2);
+    background: var(--piano-bg);
     padding: 20px;
     border-radius: 15px;
     margin-bottom: 30px;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid var(--panel-border);
 }
 
 .piano {
@@ -181,7 +249,7 @@ body {
 }
 
 .key {
-    border: 1px solid #ccc;
+    border: 1px solid var(--key-border);
     cursor: pointer;
     display: flex;
     align-items: flex-end;
@@ -189,12 +257,12 @@ body {
     font-size: 12px;
     font-weight: bold;
     transition: all 0.1s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 4px var(--key-shadow);
 }
 
 .white-key {
-    background: linear-gradient(to bottom, #fff, #f0f0f0);
-    color: #333;
+    background: var(--white-key-bg);
+    color: var(--white-key-text);
     width: 40px;
     height: 120px;
     margin-right: 1px;
@@ -203,8 +271,8 @@ body {
 }
 
 .black-key {
-    background: linear-gradient(to bottom, #333, #111);
-    color: white;
+    background: var(--black-key-bg);
+    color: var(--black-key-text);
     width: 25px;
     height: 80px;
     position: absolute;
@@ -224,6 +292,7 @@ body {
     background: linear-gradient(to bottom, #2196F3, #1976D2);
     transform: scale(0.98);
     box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    color: #ffffff;
 }
 
 /* Scale highlighting */
@@ -257,16 +326,16 @@ body {
     gap: 15px;
     margin-top: 15px;
     padding: 15px;
-    background: rgba(255,255,255,0.1);
+    background: var(--panel-bg);
     border-radius: 10px;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid var(--panel-border);
     flex-wrap: wrap;
     justify-content: center;
 }
 
 .scale-filter-controls .control-group {
-    background: rgba(255,255,255,0.05);
+    background: var(--panel-bg-soft);
     padding: 10px;
     border-radius: 8px;
     min-width: 120px;
@@ -279,13 +348,13 @@ body {
 }
 
 .keyboard-mapping {
-    background: rgba(255,255,255,0.1);
+    background: var(--panel-bg);
     padding: 20px;
     border-radius: 15px;
     backdrop-filter: blur(10px);
     max-width: 800px;
     margin-bottom: 20px;
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid var(--panel-border);
 }
 
 .keyboard-mapping h3 {
@@ -308,7 +377,7 @@ body {
 }
 
 .keyboard-key {
-    background: rgba(255,255,255,0.2);
+    background: var(--keyboard-key-bg);
     padding: 8px 12px;
     border-radius: 5px;
     font-family: monospace;
@@ -325,7 +394,7 @@ body {
 
 /* Keyboard mapping key styles to match the original */
 .kb-key {
-    background: rgba(255,255,255,0.2);
+    background: var(--keyboard-key-bg);
     padding: 8px 12px;
     border-radius: 5px;
     font-family: monospace;
@@ -337,15 +406,15 @@ body {
 }
 
 .kb-key.white-bg {
-    background: rgba(255,255,255,0.3);
-    color: #333;
-    border: 1px solid rgba(255,255,255,0.5);
+    background: var(--keyboard-white-bg);
+    color: var(--keyboard-white-text);
+    border: 1px solid var(--keyboard-white-border);
 }
 
 .kb-key.black-bg {
-    background: rgba(0,0,0,0.6);
-    color: white;
-    border: 1px solid rgba(255,255,255,0.3);
+    background: var(--keyboard-black-bg);
+    color: var(--keyboard-black-text);
+    border: 1px solid var(--keyboard-black-border);
 }
 
 .kb-key.control-key {
@@ -367,13 +436,13 @@ body {
 }
 
 .instructions {
-    background: rgba(255,255,255,0.1);
+    background: var(--panel-bg);
     padding: 20px;
     border-radius: 15px;
     backdrop-filter: blur(10px);
     max-width: 600px;
     text-align: center;
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid var(--panel-border);
 }
 
 .instructions h3, .instructions h4 {
@@ -397,7 +466,7 @@ body {
 }
 
 .instructions code {
-    background: rgba(0,0,0,0.3);
+    background: var(--instructions-code-bg);
     padding: 2px 6px;
     border-radius: 3px;
     font-family: monospace;
@@ -411,9 +480,9 @@ body {
 }
 
 button {
-    background: rgba(255,255,255,0.2);
-    border: 1px solid rgba(255,255,255,0.3);
-    color: white;
+    background: var(--button-bg);
+    border: 1px solid var(--button-border);
+    color: var(--button-text);
     padding: 10px 20px;
     border-radius: 5px;
     cursor: pointer;
@@ -423,7 +492,7 @@ button {
 }
 
 button:hover {
-    background: rgba(255,255,255,0.3);
+    background: var(--button-hover-bg);
     transform: translateY(-1px);
 }
 
@@ -457,7 +526,7 @@ button.button-pressed:hover {
 input:focus, select:focus {
     outline: 2px solid #4CAF50;
     outline-offset: 2px;
-    background: rgba(255,255,255,0.3);
+    background: var(--control-focus-bg);
 }
 
 /* Piano key focus states */
@@ -480,7 +549,8 @@ input:focus, select:focus {
     bottom: 5px;
     font-size: 10px;
     font-weight: normal;
-    opacity: 0.7;
+    opacity: 1;
+    color: inherit;
     pointer-events: none;
 }
 
@@ -489,8 +559,8 @@ input:focus, select:focus {
     bottom: 5px;
     font-size: 9px;
     font-weight: normal;
-    opacity: 0.8;
-    color: rgba(255, 255, 255, 0.8);
+    opacity: 1;
+    color: inherit;
     pointer-events: none;
 }
 
