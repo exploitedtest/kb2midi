@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage, powerMonitor } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, powerMonitor, nativeTheme, ipcMain } = require('electron');
 const path = require('path');
 
 // Silence Chromium logging in production or if QUIET_LOGS=1 is set
@@ -27,8 +27,16 @@ const CONFIG = {
 
 let mainWindow;
 let tray;
-let isAlwaysOnTop = true;
+let isAlwaysOnTop = false;
 app.isQuitting = false;
+
+const getSystemTheme = () => (nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
+
+function broadcastTheme() {
+  if (mainWindow) {
+    mainWindow.webContents.send('theme-updated', getSystemTheme());
+  }
+}
 
 function createWindow() {
   try {
@@ -204,6 +212,12 @@ function createMenu() {
 
 // App event handlers
 app.whenReady().then(() => {
+  nativeTheme.themeSource = 'system';
+  ipcMain.handle('get-system-theme', () => getSystemTheme());
+  nativeTheme.on('updated', () => {
+    broadcastTheme();
+  });
+
   createWindow();
   createTray();
   createMenu();

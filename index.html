@@ -4,9 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>kb2midi</title>
+    <script>
+        (function () {
+            try {
+                const media = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+                if (media) {
+                    document.documentElement.dataset.theme = media.matches ? 'dark' : 'light';
+                }
+            } catch {}
+        })();
+    </script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <div id="splash" class="splash" aria-label="Loading">
+        <div class="splash-content">
+            <div class="splash-title">🎹 kb2midi</div>
+            <div class="splash-subtitle">Loading…</div>
+            <div class="splash-spinner" aria-hidden="true"></div>
+        </div>
+    </div>
     <div class="header">
         <h1>🎹 kb2midi</h1>
         <div class="status" id="status">Ready to play!</div>

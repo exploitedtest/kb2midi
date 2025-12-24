@@ -5,10 +5,15 @@
 }
 
 :root {
-    color-scheme: light dark;
+    color-scheme: light;
     --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     --text-color: #ffffff;
     --text-muted: rgba(255, 255, 255, 0.8);
+    --splash-bg: var(--bg-gradient);
+    --splash-text: var(--text-color);
+    --splash-muted: var(--text-muted);
+    --splash-spinner-track: rgba(255, 255, 255, 0.25);
+    --splash-spinner-active: rgba(255, 255, 255, 0.9);
     --panel-bg: rgba(255, 255, 255, 0.1);
     --panel-bg-soft: rgba(255, 255, 255, 0.05);
     --panel-border: rgba(255, 255, 255, 0.2);
@@ -37,39 +42,42 @@
     --instructions-code-bg: rgba(0, 0, 0, 0.3);
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg-gradient: linear-gradient(135deg, #080600 0%, #1b1304 100%);
-        --text-color: #e0dbcf;
-        --text-muted: rgba(224, 219, 207, 0.75);
-        --panel-bg: rgba(0, 0, 0, 0.78);
-        --panel-bg-soft: rgba(0, 0, 0, 0.6);
-        --panel-border: rgba(224, 219, 207, 0.14);
-        --panel-border-strong: rgba(224, 219, 207, 0.22);
-        --control-bg: rgba(0, 0, 0, 0.7);
-        --control-border: rgba(224, 219, 207, 0.2);
-        --control-focus-bg: rgba(0, 0, 0, 0.92);
-        --button-bg: rgba(0, 0, 0, 0.7);
-        --button-border: rgba(224, 219, 207, 0.22);
-        --button-text: #e0dbcf;
-        --button-hover-bg: rgba(0, 0, 0, 0.95);
-        --piano-bg: rgba(255, 255, 255, 0.06);
-        --key-border: rgba(224, 219, 207, 0.2);
-        --white-key-bg: linear-gradient(to bottom, #000000, #110d08);
-        --white-key-text: #e0dbcf;
-        --black-key-bg: linear-gradient(to bottom, #9a9a9a, #b8b8b8);
-        --black-key-text: #000000;
-        --key-shadow: rgba(255, 255, 255, 0.2);
-        --keyboard-key-bg: rgba(224, 219, 207, 0.1);
-        --keyboard-white-bg: rgba(0, 0, 0, 0.8);
-        --keyboard-white-text: #e0dbcf;
-        --keyboard-white-border: rgba(224, 219, 207, 0.2);
-        --keyboard-black-bg: rgba(255, 255, 255, 0.7);
-        --keyboard-black-text: #000000;
-        --keyboard-black-border: rgba(0, 0, 0, 0.2);
-        --instructions-code-bg: rgba(255, 255, 255, 0.1);
-    }
-
+:root[data-theme='dark'] {
+    color-scheme: dark;
+    --bg-gradient: linear-gradient(135deg, #080600 0%, #1b1304 100%);
+    --text-color: #e0dbcf;
+    --text-muted: rgba(224, 219, 207, 0.75);
+    --splash-bg: var(--bg-gradient);
+    --splash-text: var(--text-color);
+    --splash-muted: var(--text-muted);
+    --splash-spinner-track: rgba(224, 219, 207, 0.2);
+    --splash-spinner-active: rgba(224, 219, 207, 0.85);
+    --panel-bg: rgba(0, 0, 0, 0.78);
+    --panel-bg-soft: rgba(0, 0, 0, 0.6);
+    --panel-border: rgba(224, 219, 207, 0.14);
+    --panel-border-strong: rgba(224, 219, 207, 0.22);
+    --control-bg: rgba(0, 0, 0, 0.7);
+    --control-border: rgba(224, 219, 207, 0.2);
+    --control-focus-bg: rgba(0, 0, 0, 0.92);
+    --button-bg: rgba(0, 0, 0, 0.7);
+    --button-border: rgba(224, 219, 207, 0.22);
+    --button-text: #e0dbcf;
+    --button-hover-bg: rgba(0, 0, 0, 0.95);
+    --piano-bg: rgba(255, 255, 255, 0.06);
+    --key-border: rgba(224, 219, 207, 0.2);
+    --white-key-bg: linear-gradient(to bottom, #000000, #110d08);
+    --white-key-text: #e0dbcf;
+    --black-key-bg: linear-gradient(to bottom, #9a9a9a, #b8b8b8);
+    --black-key-text: #000000;
+    --key-shadow: rgba(255, 255, 255, 0.2);
+    --keyboard-key-bg: rgba(224, 219, 207, 0.1);
+    --keyboard-white-bg: rgba(0, 0, 0, 0.8);
+    --keyboard-white-text: #e0dbcf;
+    --keyboard-white-border: rgba(224, 219, 207, 0.2);
+    --keyboard-black-bg: rgba(255, 255, 255, 0.7);
+    --keyboard-black-text: #000000;
+    --keyboard-black-border: rgba(0, 0, 0, 0.2);
+    --instructions-code-bg: rgba(255, 255, 255, 0.1);
 }
 
 body {
@@ -81,6 +89,69 @@ body {
     align-items: center;
     padding: 20px;
     color: var(--text-color);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --splash-bg: linear-gradient(135deg, #080600 0%, #1b1304 100%);
+        --splash-text: #e0dbcf;
+        --splash-muted: rgba(224, 219, 207, 0.75);
+        --splash-spinner-track: rgba(224, 219, 207, 0.2);
+        --splash-spinner-active: rgba(224, 219, 207, 0.85);
+    }
+}
+
+.splash {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--splash-bg);
+    color: var(--splash-text);
+    transition: opacity 220ms ease;
+}
+
+.splash-content {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+}
+
+.splash-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.splash-subtitle {
+    font-size: 1rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--splash-muted);
+}
+
+.splash-spinner {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 3px solid var(--splash-spinner-track);
+    border-top-color: var(--splash-spinner-active);
+    animation: splash-spin 900ms linear infinite;
+}
+
+.splash.splash-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+@keyframes splash-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .header {

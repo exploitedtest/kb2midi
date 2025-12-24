@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     chrome: process.versions.chrome,
     electron: process.versions.electron
   },
+  getSystemTheme: () => ipcRenderer.invoke('get-system-theme'),
+  onThemeChange: (callback) => ipcRenderer.on('theme-updated', (_event, theme) => callback?.(theme)),
   onSystemResume: (callback) => ipcRenderer.on('system-resume', () => callback?.()),
   onSystemSuspend: (callback) => ipcRenderer.on('system-suspend', () => callback?.()),
   onAppFocus: (callback) => ipcRenderer.on('app-focus', () => callback?.()),

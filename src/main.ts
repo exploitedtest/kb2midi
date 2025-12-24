@@ -1273,7 +1273,31 @@ class MIDIController {
  * Creates a new MIDIController instance to start the application
  */
 document.addEventListener('DOMContentLoaded', () => {
+  const applyTheme = (theme: 'light' | 'dark') => {
+    document.documentElement.dataset.theme = theme;
+  };
+  const themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+  const applyThemeFromMedia = () => applyTheme(themeMedia.matches ? 'dark' : 'light');
+
+  applyThemeFromMedia();
+  if (typeof themeMedia.addEventListener === 'function') {
+    themeMedia.addEventListener('change', applyThemeFromMedia);
+  } else {
+    themeMedia.addListener(applyThemeFromMedia);
+  }
+
   const controller = new MIDIController();
+  const splash = document.getElementById('splash');
+  const hideSplash = () => {
+    if (!splash || splash.classList.contains('splash-hidden')) return;
+    splash.classList.add('splash-hidden');
+    window.setTimeout(() => splash.remove(), 260);
+  };
+  if (document.readyState === 'complete') {
+    hideSplash();
+  } else {
+    window.addEventListener('load', hideSplash, { once: true });
+  }
   
   // Clean up resources when the window is about to close
   window.addEventListener('beforeunload', () => {
@@ -1317,6 +1341,8 @@ document.addEventListener('visibilitychange', () => {
   const electronAPI = window.electronAPI;
   if (electronAPI) {
     try {
+      electronAPI.getSystemTheme?.().then(applyTheme).catch(() => {});
+      electronAPI.onThemeChange?.((theme) => applyTheme(theme));
       electronAPI.onSystemResume?.(() => controller.resume());
       electronAPI.onSystemSuspend?.(() => controller.cleanup());
       electronAPI.onAppFocus?.(() => controller.resume());
