@@ -1,6 +1,6 @@
 {
   "name": "kb2midi",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "2.5 octave QWERTY keyboard MIDI controller",
   "main": "electron/main.cjs",
   "type": "module",

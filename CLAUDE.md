@@ -44,6 +44,8 @@ npm run electron-serve         # Launch Electron app
 | `src/clock-sync.ts` | External MIDI clock handling, BPM events |
 | `src/scale-filter.ts` | Scale definitions, filtering, piano highlighting |
 | `src/ui-controller.ts` | DOM wiring, visual feedback, state binding |
+| `src/types.ts` | TypeScript interfaces, MIDI constants, helper functions |
+| `src/global.d.ts` | Web MIDI API type extensions for Electron bridge |
 | `tests/mocks/web-midi.mock.ts` | MIDI mock for unit tests |
 
 ### Workflow Priorities
@@ -105,6 +107,8 @@ npm run electron              # Run Electron with production build
 npm run electron-dev          # Run Electron in development mode
 npm run electron-serve        # Start dev server + Electron (recommended for development)
 npm run electron-serve-devtools  # Same as above with DevTools auto-open
+npm run electron-serve-quiet  # Same as above with suppressed Chromium logs
+npm run electron-serve-production  # Dev server + Electron in production mode
 npm run electron-preview      # Build and preview in Electron
 npm run electron-build        # Build Electron distributables (use EB_ARGS to customize)
 ```
@@ -410,6 +414,29 @@ output.wasMessageSent([0x90, 60, 100]); // Check specific message
 - **Supported**: Chrome, Safari, Edge (Web MIDI API required)
 - **Not Supported**: Firefox (limited Web MIDI API implementation)
 - **Mobile**: Limited support due to Web MIDI API availability
+- **Theme Support**: Automatic dark/light mode based on system preference
+
+## UI & Theming
+
+### Dark Mode Support
+The application supports automatic dark/light mode switching based on the user's system preference using CSS custom properties and the `prefers-color-scheme` media query.
+
+**Implementation:**
+- **CSS Variables**: All colors defined as CSS custom properties in `:root`
+- **Media Query**: `@media (prefers-color-scheme: dark)` overrides variables for dark theme
+- **No JavaScript Toggle**: Follows system preference automatically (no manual override needed)
+- **Inverted Piano Keys**: Dark mode inverts white/black key colors for better contrast
+
+**Key CSS Variables:**
+- `--bg-gradient` - Background gradient
+- `--text-color` / `--text-muted` - Primary and secondary text
+- `--panel-bg` / `--panel-border` - Control panel styling
+- `--white-key-bg` / `--black-key-bg` - Piano key backgrounds
+- `--keyboard-white-bg` / `--keyboard-black-bg` - QWERTY keyboard display
+
+**Styling Files:**
+- `styles.css` - Complete theme definitions and UI styling (~500 lines)
+- `index.html` - UI structure with semantic IDs for DOM binding
 
 ## Code Conventions
 
