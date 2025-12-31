@@ -515,7 +515,9 @@ describe('KeyboardInput', () => {
       document.body.removeChild(input);
     });
 
-    it('should allow keydown events from select elements', () => {
+    it('should allow keydown events from select elements (when not expanded)', () => {
+      // Note: When a native <select> is expanded, browser takes full keyboard control.
+      // This is a browser limitation. Notes only play when dropdown is focused but closed.
       keyboardInput.onNoteOn('KeyZ', noteOnHandler);
 
       const select = document.createElement('select');
@@ -530,34 +532,6 @@ describe('KeyboardInput', () => {
       document.dispatchEvent(event);
 
       expect(noteOnHandler).toHaveBeenCalled();
-
-      document.body.removeChild(select);
-    });
-
-    it('should block native keyboard behavior on select elements (expanded dropdown support)', () => {
-      // This ensures notes can play while a dropdown is open/expanded
-      const select = document.createElement('select');
-      const option1 = document.createElement('option');
-      option1.value = 'a';
-      option1.textContent = 'Option A';
-      const option2 = document.createElement('option');
-      option2.value = 'b';
-      option2.textContent = 'Option B';
-      select.appendChild(option1);
-      select.appendChild(option2);
-      document.body.appendChild(select);
-
-      const event = new KeyboardEvent('keydown', {
-        code: 'KeyA', // 'A' would normally trigger type-to-search in a select
-        bubbles: true,
-        cancelable: true
-      });
-
-      Object.defineProperty(event, 'target', { value: select, enumerable: true });
-      document.dispatchEvent(event);
-
-      // preventDefault should have been called to block native select behavior
-      expect(event.defaultPrevented).toBe(true);
 
       document.body.removeChild(select);
     });
