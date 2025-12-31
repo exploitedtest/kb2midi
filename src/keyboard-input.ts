@@ -155,6 +155,11 @@ export class KeyboardInput {
          ['text', 'search', 'email', 'password', 'url', 'tel', 'number'].includes(target.type)) ||
         target.isContentEditable) return;
 
+    // Prevent all keyboard behavior on selects (type-to-search, arrow navigation)
+    if (target instanceof HTMLSelectElement) {
+      event.preventDefault();
+    }
+
     this.pressedKeys.add(event.code);
 
     // Check for special keys first

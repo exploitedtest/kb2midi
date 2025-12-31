@@ -122,13 +122,7 @@ export class UIController {
         }
       });
     });
-
-    // Disable keyboard navigation on dropdowns - mouse clicks only
-    document.querySelectorAll('select').forEach(element => {
-      element.addEventListener('keydown', (e) => {
-        e.preventDefault();
-      });
-    });
+    // Note: Dropdown keyboard behavior is disabled in keyboard-input.ts (capture phase)
   }
 
   /**
