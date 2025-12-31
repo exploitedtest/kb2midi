@@ -253,19 +253,19 @@ describe('Arpeggiator', () => {
     });
 
     describe('Swing Timing', () => {
-      it('should delay odd steps by 50% at full swing', () => {
+      it('should delay odd steps by up to 50% at full amount', () => {
         const timing = new SwingTiming(1.0);
 
         expect(timing.getDelayOffset(0, 100)).toBe(0);
-        expect(timing.getDelayOffset(1, 100)).toBe(50); // 50% of 100ms
+        expect(timing.getDelayOffset(1, 100)).toBe(50); // 50% of 100ms at full amount
         expect(timing.getDelayOffset(2, 100)).toBe(0);
         expect(timing.getDelayOffset(3, 100)).toBe(50);
       });
 
-      it('should scale delay with swing amount', () => {
+      it('should scale delay with amount parameter', () => {
         const timing = new SwingTiming(0.5);
 
-        expect(timing.getDelayOffset(1, 100)).toBe(25); // 50% swing of 50ms
+        expect(timing.getDelayOffset(1, 100)).toBe(25); // 50% of 50ms max = 25ms
       });
 
       it('should not delay even steps', () => {
@@ -278,19 +278,19 @@ describe('Arpeggiator', () => {
     });
 
     describe('Shuffle Timing', () => {
-      it('should delay odd steps to 2/3 position', () => {
+      it('should delay odd steps to 2/3 position at full amount', () => {
         const timing = new ShuffleTiming(1.0);
 
         const offset = timing.getDelayOffset(1, 150);
-        expect(offset).toBeCloseTo(100, 0.1); // 2/3 of 150ms
+        expect(offset).toBeCloseTo(100, 0.1); // 66.7% of 150ms ≈ 100ms
       });
     });
 
     describe('Dotted Timing', () => {
-      it('should delay odd steps to 75% position', () => {
+      it('should delay odd steps to 75% position at full amount', () => {
         const timing = new DottedTiming(1.0);
 
-        expect(timing.getDelayOffset(1, 100)).toBe(75);
+        expect(timing.getDelayOffset(1, 100)).toBe(75); // 75% of 100ms
       });
     });
 

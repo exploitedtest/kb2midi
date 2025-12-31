@@ -47,6 +47,8 @@ class MIDIController {
   private arpBoostBaseDivisor: number | null = null;
   // Timing strategy state
   private currentTimingType: 'straight' | 'swing' | 'shuffle' | 'dotted' = 'straight';
+  private lastGateValue: number = 0.5; // Remembered gate for straight mode
+  private lastTimingAmount: number = 0.5; // Remembered amount for timing modes
   private humanizeEnabled: boolean = false;
   private timingSeed: number = Math.random() * 1000000;
   // Momentary controller channel tracking (for mod wheel and pitch bend)
@@ -446,12 +448,20 @@ class MIDIController {
         type: 'select'
       },
       
-      // Arpeggiator gate
+      // Arpeggiator timing amount (controls gate in straight mode, delay+gate in timing modes)
       {
         id: 'arp-gate',
         setter: (value) => {
-          const numValue = parseInt(value);
-          this.arpeggiator.setGateLength(numValue / 100);
+          const numValue = parseInt(value) / 100;
+          // Store in the appropriate variable based on current mode
+          if (this.currentTimingType === 'straight') {
+            this.lastGateValue = numValue;
+            this.arpeggiator.setGateLength(numValue);
+          } else {
+            this.lastTimingAmount = numValue;
+          }
+          // Rebuild the strategy with current values
+          this.applyTimingStrategy();
         },
         type: 'range',
         displayId: 'arp-gate-value',
@@ -614,9 +624,41 @@ class MIDIController {
 
   /**
    * Updates the timing type and applies the new timing strategy
+   * Restores the remembered value for the mode being switched to
    */
   private updateTimingType(type: 'straight' | 'swing' | 'shuffle' | 'dotted'): void {
     this.currentTimingType = type;
+
+    // Restore the appropriate remembered value and update slider
+    const slider = document.getElementById('arp-gate') as HTMLInputElement | null;
+    const valueDisplay = document.getElementById('arp-gate-value');
+    const sliderLabel = document.querySelector('#arp-gate')?.parentElement?.querySelector('label');
+
+    if (type === 'straight') {
+      // Restore gate value
+      if (slider) {
+        slider.value = String(Math.round(this.lastGateValue * 100));
+      }
+      if (valueDisplay) {
+        valueDisplay.textContent = `${Math.round(this.lastGateValue * 100)}%`;
+      }
+      if (sliderLabel) {
+        sliderLabel.textContent = 'Gate';
+      }
+      this.arpeggiator.setGateLength(this.lastGateValue);
+    } else {
+      // Restore timing amount
+      if (slider) {
+        slider.value = String(Math.round(this.lastTimingAmount * 100));
+      }
+      if (valueDisplay) {
+        valueDisplay.textContent = `${Math.round(this.lastTimingAmount * 100)}%`;
+      }
+      if (sliderLabel) {
+        sliderLabel.textContent = 'Amount';
+      }
+    }
+
     this.applyTimingStrategy();
   }
 
@@ -635,23 +677,25 @@ class MIDIController {
   /**
    * Applies the current timing strategy to the arpeggiator
    * Combines base timing (swing/shuffle/dotted) with optional humanization
+   * Uses lastTimingAmount for timing modes, lastGateValue for straight mode
    */
   private applyTimingStrategy(): void {
-    // Create base timing strategy based on type
+    // Create base timing strategy based on type and stored amount
     let baseStrategy;
     switch (this.currentTimingType) {
       case 'swing':
-        baseStrategy = new SwingTiming(1.0); // Full swing amount
+        baseStrategy = new SwingTiming(this.lastTimingAmount);
         break;
       case 'shuffle':
-        baseStrategy = new ShuffleTiming(1.0); // Full shuffle amount
+        baseStrategy = new ShuffleTiming(this.lastTimingAmount);
         break;
       case 'dotted':
-        baseStrategy = new DottedTiming(1.0); // Full dotted amount
+        baseStrategy = new DottedTiming(this.lastTimingAmount);
         break;
       case 'straight':
       default:
         baseStrategy = new StraightTiming();
+        // Gate is already set via setGateLength, no need to set here
         break;
     }
 

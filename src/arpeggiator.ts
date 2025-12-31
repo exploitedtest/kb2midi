@@ -13,6 +13,14 @@ export interface TimingStrategy {
    * @returns Delay offset in milliseconds (can be negative for early playback)
    */
   getDelayOffset(globalStep: number, baseStepMs: number): number;
+
+  /**
+   * Returns a fixed gate length (0-1) that this timing strategy requires.
+   * When present, this overrides the user's gate slider setting.
+   * Return null to use the user's setting (e.g., for straight timing).
+   * @param globalStep - Optional step number to allow different gates for downbeats/offbeats
+   */
+  getFixedGateLength?(globalStep?: number): number | null;
 }
 
 /**
@@ -22,6 +30,10 @@ export class StraightTiming implements TimingStrategy {
   getDelayOffset(): number {
     return 0;
   }
+
+  getFixedGateLength(_globalStep?: number): number | null {
+    return null; // User controls gate length
+  }
 }
 
 /**
@@ -30,6 +42,7 @@ export class StraightTiming implements TimingStrategy {
  */
 export class SwingTiming implements TimingStrategy {
   private amount: number;
+  private static readonly MAX_DELAY = 0.50; // Max 50% delay at full amount
 
   constructor(amount: number) {
     // Clamp amount to 0-1 range
@@ -42,10 +55,23 @@ export class SwingTiming implements TimingStrategy {
       return 0; // Even steps play on time
     }
 
-    // Delay odd steps by up to 50% of the step duration
-    // This creates the classic swing feel where downbeats are tight,
-    // upbeats are laid back
-    return baseStepMs * 0.5 * this.amount;
+    // Delay scales with amount: 0% at amount=0, MAX_DELAY at amount=1
+    return baseStepMs * SwingTiming.MAX_DELAY * this.amount;
+  }
+
+  getFixedGateLength(globalStep: number = 0): number {
+    const delay = SwingTiming.MAX_DELAY * this.amount;
+    const minGap = 0.10; // Always leave 10% gap before next step
+
+    if (globalStep % 2 === 0) {
+      // Downbeat: moderate gate, shrinks slowly with amount
+      return Math.max(0.25, 0.65 - delay * 0.3);
+    } else {
+      // Offbeat: cap gate so it doesn't run too close to next downbeat
+      const maxAllowedGate = Math.max(0.15, 1 - delay - minGap);
+      const desiredGate = 0.50 - delay * 0.5;
+      return Math.max(0.15, Math.min(desiredGate, maxAllowedGate));
+    }
   }
 }
 
@@ -56,6 +82,7 @@ export class SwingTiming implements TimingStrategy {
  */
 export class ShuffleTiming implements TimingStrategy {
   private amount: number;
+  private static readonly MAX_DELAY = 0.667; // Max 66.7% delay (true triplet feel)
 
   constructor(amount: number) {
     this.amount = Math.max(0, Math.min(1, amount));
@@ -67,20 +94,34 @@ export class ShuffleTiming implements TimingStrategy {
       return 0; // Even steps on time
     }
 
-    // Delay to approximately 66.67% of the step (2:1 triplet ratio)
-    // This is more aggressive than regular swing (50%)
-    const tripletPosition = baseStepMs * (2/3);
-    return tripletPosition * this.amount;
+    // Delay scales with amount: 0% at amount=0, MAX_DELAY at amount=1
+    return baseStepMs * ShuffleTiming.MAX_DELAY * this.amount;
+  }
+
+  getFixedGateLength(globalStep: number = 0): number {
+    const delay = ShuffleTiming.MAX_DELAY * this.amount;
+    const minGap = 0.10; // Always leave 10% gap before next step
+
+    if (globalStep % 2 === 0) {
+      // Downbeat: moderate gate, shrinks slowly with amount
+      return Math.max(0.25, 0.65 - delay * 0.3);
+    } else {
+      // Offbeat: cap gate so it doesn't run too close to next downbeat
+      const maxAllowedGate = Math.max(0.15, 1 - delay - minGap);
+      const desiredGate = 0.50 - delay * 0.5;
+      return Math.max(0.15, Math.min(desiredGate, maxAllowedGate));
+    }
   }
 }
 
 /**
  * Dotted Timing - Delays offbeats to 75% position (dotted 8th feel)
- * Creates a dotted eighth note feel, more extreme than shuffle
+ * Creates a dotted eighth note feel, most extreme of the timing modes
  * Offbeat lands on the last 16th of the beat
  */
 export class DottedTiming implements TimingStrategy {
   private amount: number;
+  private static readonly MAX_DELAY = 0.75; // Max 75% delay (true dotted 8th)
 
   constructor(amount: number) {
     this.amount = Math.max(0, Math.min(1, amount));
@@ -92,10 +133,23 @@ export class DottedTiming implements TimingStrategy {
       return 0;
     }
 
-    // Delay to 75% of the step (dotted eighth note timing)
-    // Most extreme of the swing variations
-    const dottedPosition = baseStepMs * 0.75;
-    return dottedPosition * this.amount;
+    // Delay scales with amount: 0% at amount=0, MAX_DELAY at amount=1
+    return baseStepMs * DottedTiming.MAX_DELAY * this.amount;
+  }
+
+  getFixedGateLength(globalStep: number = 0): number {
+    const delay = DottedTiming.MAX_DELAY * this.amount;
+    const minGap = 0.10; // Always leave 10% gap before next step
+
+    if (globalStep % 2 === 0) {
+      // Downbeat: moderate gate, shrinks slowly with amount
+      return Math.max(0.25, 0.65 - delay * 0.3);
+    } else {
+      // Offbeat: cap gate so it doesn't run too close to next downbeat
+      const maxAllowedGate = Math.max(0.15, 1 - delay - minGap);
+      const desiredGate = 0.50 - delay * 0.5;
+      return Math.max(0.15, Math.min(desiredGate, maxAllowedGate));
+    }
   }
 }
 
@@ -144,6 +198,10 @@ export class HumanizeTiming implements TimingStrategy {
     // Negative values mean play early, positive means play late
     return variation * adaptiveMax;
   }
+
+  getFixedGateLength(_globalStep?: number): number | null {
+    return null; // Humanize doesn't affect gate length
+  }
 }
 
 /**
@@ -166,6 +224,18 @@ export class LayeredTiming implements TimingStrategy {
       (total, strategy) => total + strategy.getDelayOffset(globalStep, baseStepMs),
       0
     );
+  }
+
+  getFixedGateLength(globalStep?: number): number | null {
+    // Return the first non-null fixed gate length from any strategy
+    // This allows swing/shuffle/dotted to control gate even when layered with humanize
+    for (const strategy of this.strategies) {
+      const fixed = strategy.getFixedGateLength?.(globalStep);
+      if (fixed !== null && fixed !== undefined) {
+        return fixed;
+      }
+    }
+    return null;
   }
 }
 
@@ -264,6 +334,11 @@ export class GateProbability {
  *   - false = Window jumps by notesPerStep (non-overlapping)
  */
 export class Arpeggiator {
+  // Timing constants for consistent, maintainable timing calculations
+  private static readonly GATE_HEADROOM_MS = 2; // Buffer between gate end and next step
+  private static readonly TIMING_SAFETY_MS = 5; // Safety margin for timing offsets
+  private static readonly MIN_GATE_MS = 5; // Minimum audible gate duration
+
   private state: ArpeggiatorState = {
     enabled: false,
     pattern: 'up',
@@ -504,6 +579,82 @@ export class Arpeggiator {
     this.state.currentStep = 0;
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TIMING HELPERS - Centralized timing calculations
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Returns unified timing context for the current BPM and settings.
+   * Consolidates calculations to keep timing constraints consistent.
+   *
+   * When timing strategies (swing/shuffle/dotted) provide a fixed gate length,
+   * we use that instead of the user's setting. This ensures proper timing feel
+   * without note overlaps.
+   */
+  private getTimingContext(): { stepTimeMs: number; gateTimeMs: number; maxDelayMs: number } {
+    const stepTimeMs = this.getStepTimeMs();
+
+    // Check if the timing strategy specifies a fixed gate length
+    // Pass step counter so strategies can return different gates for downbeats/offbeats
+    const fixedGate = this.timingStrategy.getFixedGateLength?.(this.stepCounter);
+
+    let gateTimeMs: number;
+    if (fixedGate !== null && fixedGate !== undefined) {
+      // Use the timing strategy's fixed gate length (already tuned for the delay)
+      gateTimeMs = Math.max(Arpeggiator.MIN_GATE_MS, stepTimeMs * fixedGate);
+    } else {
+      // Use user's gate setting with safety clamps
+      const maxGateTime = Math.max(0, stepTimeMs - Arpeggiator.GATE_HEADROOM_MS);
+      const rawGateTime = this.calculateGateTime(stepTimeMs);
+      gateTimeMs = Math.max(Arpeggiator.MIN_GATE_MS, Math.min(rawGateTime, maxGateTime));
+    }
+
+    const maxDelayMs = this.calculateMaxDelay(stepTimeMs, gateTimeMs);
+    return { stepTimeMs, gateTimeMs, maxDelayMs };
+  }
+
+  /**
+   * Calculates maximum safe timing delay so the last note ends within the step.
+   */
+  private calculateMaxDelay(stepTimeMs: number, gateTimeMs: number): number {
+    const lastGateEnd = this.getLastGateEnd(stepTimeMs, gateTimeMs);
+    return Math.max(0, stepTimeMs - lastGateEnd - Arpeggiator.TIMING_SAFETY_MS);
+  }
+
+  /**
+   * Calculates when the last gate ends within a step, accounting for ratchets.
+   */
+  private getLastGateEnd(stepTimeMs: number, gateTimeMs: number): number {
+    if (this.ratchetCount <= 1) {
+      return gateTimeMs;
+    }
+
+    const subStepTime = stepTimeMs / this.ratchetCount;
+    const subGateTime = Math.min(gateTimeMs / this.ratchetCount, subStepTime * 0.9);
+    return (this.ratchetCount - 1) * subStepTime + subGateTime;
+  }
+
+  /**
+   * Collects notes to play for the current step based on pattern type.
+   */
+  private collectNotesToPlay(stepIndex: number): number[] {
+    if (this.state.pattern === 'chord' || this.state.pattern === 'stacked-chord') {
+      // Chord modes: play ALL notes simultaneously
+      return this.state.pattern === 'chord'
+        ? [...this.state.noteOrder]
+        : this.getStackedChordNotes();
+    }
+
+    // Pattern modes: play notesPerStep notes at a time (sliding window)
+    const notes: number[] = [];
+    const sequenceLength = this.state.noteOrder.length;
+    for (let i = 0; i < this.state.notesPerStep && i < sequenceLength; i++) {
+      const noteIndex = (stepIndex + i) % sequenceLength;
+      notes.push(this.state.noteOrder[noteIndex]);
+    }
+    return notes;
+  }
+
   /**
    * SIMPLIFIED: Just plays the current step - no advancement logic
    * NEW: Supports sliding window with notesPerStep parameter
@@ -537,61 +688,37 @@ export class Arpeggiator {
         baseVelocity = Math.max(1, Math.min(127, baseVelocity + offset));
       }
 
-      const stepTimeMs = this.getStepTimeMs();
-      const gateTime = Math.min(this.calculateGateTime(), Math.max(0, stepTimeMs - 2)); // leave a tiny headroom to avoid overlap
+      const { stepTimeMs, gateTimeMs, maxDelayMs } = this.getTimingContext();
 
-      // Calculate timing offset using strategy
+      // Calculate timing offset using strategy and clamp to safe headroom.
       const timingOffset = this.timingStrategy.getDelayOffset(this.stepCounter, stepTimeMs);
-      const playbackDelay = Math.max(0, timingOffset); // Clamp to 0 minimum for setTimeout
+      const playbackDelay = Math.min(maxDelayMs, Math.max(0, timingOffset));
+
+      // Capture step and notes now to avoid race conditions with delayed playback.
+      const capturedStep = this.state.currentStep;
+      const notesToPlay = this.collectNotesToPlay(capturedStep);
 
       // Execute note playback after timing offset
       const executePlayback = () => {
-        if (this.state.pattern === 'chord' || this.state.pattern === 'stacked-chord') {
-        // Chord modes: play ALL notes simultaneously (ignores notesPerStep)
-        const notesToPlay = this.state.pattern === 'chord'
-          ? [...this.state.noteOrder]
-          : this.getStackedChordNotes();
-
         notesToPlay.forEach(note => {
-          this.playNoteWithRatchet(note, baseVelocity, channel, gateTime, stepTimeMs);
+          this.playNoteWithRatchet(note, baseVelocity, channel, gateTimeMs, stepTimeMs);
           this.onStepCallbacks.forEach(callback => {
             try {
-              callback(this.state.currentStep, note);
+              callback(capturedStep, note);
             } catch (error) {
               console.error('Error in arpeggiator step callback:', error);
             }
           });
         });
-
-      } else {
-        // Pattern modes: play notesPerStep notes at a time (sliding window)
-        const notesToPlay: number[] = [];
-        const sequenceLength = this.state.noteOrder.length;
-
-        // Collect notesPerStep notes starting from currentStep
-        for (let i = 0; i < this.state.notesPerStep && i < sequenceLength; i++) {
-          const noteIndex = (this.state.currentStep + i) % sequenceLength;
-          notesToPlay.push(this.state.noteOrder[noteIndex]);
-        }
-
-        // Play all notes in the window
-        notesToPlay.forEach(note => {
-          this.playNoteWithRatchet(note, baseVelocity, channel, gateTime, stepTimeMs);
-
-          this.onStepCallbacks.forEach(callback => {
-            try {
-              callback(this.state.currentStep, note);
-            } catch (error) {
-              console.error('Error in arpeggiator step callback:', error);
-            }
-          });
-        });
-        }
       };
 
       // Schedule playback with timing offset
       if (playbackDelay > 0) {
-        const timeout = setTimeout(executePlayback, playbackDelay);
+        const timeout = setTimeout(() => {
+          this.activeTimeouts.delete(timeout);
+          if (!this.state.enabled) return;
+          executePlayback();
+        }, playbackDelay);
         this.activeTimeouts.add(timeout);
       } else {
         // No delay, execute immediately
@@ -706,10 +833,8 @@ export class Arpeggiator {
   /**
    * Calculates gate time based on BPM and gate length
    */
-  private calculateGateTime(): number {
-    const bpm = this.clockSync.getBPM();
-    const beatTime = (60 / bpm) * 1000; // ms per quarter note
-    const stepTime = beatTime / this.state.clockDivisor;
+  private calculateGateTime(stepTimeMs?: number): number {
+    const stepTime = stepTimeMs ?? this.getStepTimeMs();
     return stepTime * this.state.gateLength;
   }
 
@@ -749,6 +874,7 @@ private playNoteWithRatchet(note: number, velocity: number, channel: number, gat
     } else {
       // Schedule subsequent repeats
       const timeout = setTimeout(() => {
+        this.activeTimeouts.delete(timeout);
         this.playNoteWithGate(note, velocity, channel, subGateTime);
       }, delay);
       this.activeTimeouts.add(timeout);
@@ -767,6 +893,7 @@ private playNoteWithGate(note: number, velocity: number, channel: number, gateTi
   // If this note is already gated on this channel, stop it before retriggering
   const existing = this.heldNoteTimeouts.get(key);
   if (existing) {
+    console.debug(`[Arp] Force-stopping note ${note}:${channel} - retriggered before gate ended`);
     clearTimeout(existing);
     this.activeTimeouts.delete(existing);
     this.heldNoteTimeouts.delete(key);
@@ -780,8 +907,8 @@ private playNoteWithGate(note: number, velocity: number, channel: number, gateTi
   }
 
   // Apply minimum gate time to prevent race conditions
-  // Notes need at least 5ms to sound properly
-  const safeGateTime = Math.max(5, gateTime);
+  // Notes need at least MIN_GATE_MS to sound properly
+  const safeGateTime = Math.max(Arpeggiator.MIN_GATE_MS, gateTime);
 
   // Start note
   this.midiEngine!.playNote(note, velocity, channel);
