@@ -123,13 +123,10 @@ export class UIController {
       });
     });
 
-    // Auto-blur non-text controls after interaction to return keyboard focus to instrument
-    document.querySelectorAll('select, input[type="range"], input[type="checkbox"], button').forEach(element => {
-      const htmlElement = element as HTMLElement;
-      // Use 'change' for selects/checkboxes/ranges, 'click' for buttons
-      const eventType = element.tagName === 'BUTTON' ? 'click' : 'change';
-      element.addEventListener(eventType, () => {
-        htmlElement.blur();
+    // Disable keyboard navigation on dropdowns - mouse clicks only
+    document.querySelectorAll('select').forEach(element => {
+      element.addEventListener('keydown', (e) => {
+        e.preventDefault();
       });
     });
   }
