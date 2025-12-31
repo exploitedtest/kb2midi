@@ -16,11 +16,60 @@ export interface TimingStrategy {
 
   /**
    * Returns a fixed gate length (0-1) that this timing strategy requires.
-   * When present, this overrides the user's gate slider setting.
+   * When non-null, this overrides the user's gate slider setting.
    * Return null to use the user's setting (e.g., for straight timing).
-   * @param globalStep - Optional step number to allow different gates for downbeats/offbeats
+   * @param globalStep - Step number to allow different gates for downbeats/offbeats
    */
-  getFixedGateLength?(globalStep?: number): number | null;
+  getFixedGateLength(globalStep: number): number | null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TIMING GATE CONSTANTS - Shared across swing/shuffle/dotted timing modes
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Minimum gap (0-1) to always leave before the next step to prevent overlap */
+const TIMING_MIN_GAP = 0.10;
+
+/** Minimum gate length (0-1) to ensure notes are always audible */
+const TIMING_MIN_GATE = 0.15;
+
+/** Base gate length (0-1) for downbeats before timing adjustments */
+const TIMING_DOWNBEAT_BASE_GATE = 0.65;
+
+/** Minimum gate length (0-1) for downbeats to prevent them from disappearing */
+const TIMING_DOWNBEAT_MIN_GATE = 0.25;
+
+/** How much to shrink downbeat gate per unit of delay (shrink factor) */
+const TIMING_DOWNBEAT_SHRINK = 0.3;
+
+/** Base gate length (0-1) for offbeats before timing adjustments */
+const TIMING_OFFBEAT_BASE_GATE = 0.50;
+
+/** How much to shrink offbeat gate per unit of delay (shrink factor) */
+const TIMING_OFFBEAT_SHRINK = 0.5;
+
+/**
+ * Calculates fixed gate length for swing/shuffle/dotted timing modes.
+ * Downbeats get a moderate gate that shrinks slowly with amount.
+ * Offbeats get a shorter gate capped to prevent overlap with the next downbeat.
+ *
+ * @param maxDelay - Maximum delay factor (e.g., 0.50 for swing, 0.667 for shuffle)
+ * @param amount - User-controlled amount (0-1)
+ * @param globalStep - Current step number (even = downbeat, odd = offbeat)
+ * @returns Gate length (0-1)
+ */
+function calculateTimingGateLength(maxDelay: number, amount: number, globalStep: number): number {
+  const delay = maxDelay * amount;
+
+  if (globalStep % 2 === 0) {
+    // Downbeat: moderate gate, shrinks slowly with amount
+    return Math.max(TIMING_DOWNBEAT_MIN_GATE, TIMING_DOWNBEAT_BASE_GATE - delay * TIMING_DOWNBEAT_SHRINK);
+  } else {
+    // Offbeat: cap gate so it doesn't run too close to next downbeat
+    const maxAllowedGate = Math.max(TIMING_MIN_GATE, 1 - delay - TIMING_MIN_GAP);
+    const desiredGate = TIMING_OFFBEAT_BASE_GATE - delay * TIMING_OFFBEAT_SHRINK;
+    return Math.max(TIMING_MIN_GATE, Math.min(desiredGate, maxAllowedGate));
+  }
 }
 
 /**
@@ -31,7 +80,7 @@ export class StraightTiming implements TimingStrategy {
     return 0;
   }
 
-  getFixedGateLength(_globalStep?: number): number | null {
+  getFixedGateLength(_globalStep: number): number | null {
     return null; // User controls gate length
   }
 }
@@ -59,19 +108,8 @@ export class SwingTiming implements TimingStrategy {
     return baseStepMs * SwingTiming.MAX_DELAY * this.amount;
   }
 
-  getFixedGateLength(globalStep: number = 0): number {
-    const delay = SwingTiming.MAX_DELAY * this.amount;
-    const minGap = 0.10; // Always leave 10% gap before next step
-
-    if (globalStep % 2 === 0) {
-      // Downbeat: moderate gate, shrinks slowly with amount
-      return Math.max(0.25, 0.65 - delay * 0.3);
-    } else {
-      // Offbeat: cap gate so it doesn't run too close to next downbeat
-      const maxAllowedGate = Math.max(0.15, 1 - delay - minGap);
-      const desiredGate = 0.50 - delay * 0.5;
-      return Math.max(0.15, Math.min(desiredGate, maxAllowedGate));
-    }
+  getFixedGateLength(globalStep: number): number {
+    return calculateTimingGateLength(SwingTiming.MAX_DELAY, this.amount, globalStep);
   }
 }
 
@@ -98,19 +136,8 @@ export class ShuffleTiming implements TimingStrategy {
     return baseStepMs * ShuffleTiming.MAX_DELAY * this.amount;
   }
 
-  getFixedGateLength(globalStep: number = 0): number {
-    const delay = ShuffleTiming.MAX_DELAY * this.amount;
-    const minGap = 0.10; // Always leave 10% gap before next step
-
-    if (globalStep % 2 === 0) {
-      // Downbeat: moderate gate, shrinks slowly with amount
-      return Math.max(0.25, 0.65 - delay * 0.3);
-    } else {
-      // Offbeat: cap gate so it doesn't run too close to next downbeat
-      const maxAllowedGate = Math.max(0.15, 1 - delay - minGap);
-      const desiredGate = 0.50 - delay * 0.5;
-      return Math.max(0.15, Math.min(desiredGate, maxAllowedGate));
-    }
+  getFixedGateLength(globalStep: number): number {
+    return calculateTimingGateLength(ShuffleTiming.MAX_DELAY, this.amount, globalStep);
   }
 }
 
@@ -137,19 +164,8 @@ export class DottedTiming implements TimingStrategy {
     return baseStepMs * DottedTiming.MAX_DELAY * this.amount;
   }
 
-  getFixedGateLength(globalStep: number = 0): number {
-    const delay = DottedTiming.MAX_DELAY * this.amount;
-    const minGap = 0.10; // Always leave 10% gap before next step
-
-    if (globalStep % 2 === 0) {
-      // Downbeat: moderate gate, shrinks slowly with amount
-      return Math.max(0.25, 0.65 - delay * 0.3);
-    } else {
-      // Offbeat: cap gate so it doesn't run too close to next downbeat
-      const maxAllowedGate = Math.max(0.15, 1 - delay - minGap);
-      const desiredGate = 0.50 - delay * 0.5;
-      return Math.max(0.15, Math.min(desiredGate, maxAllowedGate));
-    }
+  getFixedGateLength(globalStep: number): number {
+    return calculateTimingGateLength(DottedTiming.MAX_DELAY, this.amount, globalStep);
   }
 }
 
@@ -199,7 +215,7 @@ export class HumanizeTiming implements TimingStrategy {
     return variation * adaptiveMax;
   }
 
-  getFixedGateLength(_globalStep?: number): number | null {
+  getFixedGateLength(_globalStep: number): number | null {
     return null; // Humanize doesn't affect gate length
   }
 }
@@ -226,12 +242,12 @@ export class LayeredTiming implements TimingStrategy {
     );
   }
 
-  getFixedGateLength(globalStep?: number): number | null {
+  getFixedGateLength(globalStep: number): number | null {
     // Return the first non-null fixed gate length from any strategy
     // This allows swing/shuffle/dotted to control gate even when layered with humanize
     for (const strategy of this.strategies) {
-      const fixed = strategy.getFixedGateLength?.(globalStep);
-      if (fixed !== null && fixed !== undefined) {
+      const fixed = strategy.getFixedGateLength(globalStep);
+      if (fixed !== null) {
         return fixed;
       }
     }
@@ -596,10 +612,10 @@ export class Arpeggiator {
 
     // Check if the timing strategy specifies a fixed gate length
     // Pass step counter so strategies can return different gates for downbeats/offbeats
-    const fixedGate = this.timingStrategy.getFixedGateLength?.(this.stepCounter);
+    const fixedGate = this.timingStrategy.getFixedGateLength(this.stepCounter);
 
     let gateTimeMs: number;
-    if (fixedGate !== null && fixedGate !== undefined) {
+    if (fixedGate !== null) {
       // Use the timing strategy's fixed gate length (already tuned for the delay)
       gateTimeMs = Math.max(Arpeggiator.MIN_GATE_MS, stepTimeMs * fixedGate);
     } else {

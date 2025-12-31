@@ -632,7 +632,7 @@ class MIDIController {
     // Restore the appropriate remembered value and update slider
     const slider = document.getElementById('arp-gate') as HTMLInputElement | null;
     const valueDisplay = document.getElementById('arp-gate-value');
-    const sliderLabel = document.querySelector('#arp-gate')?.parentElement?.querySelector('label');
+    const sliderLabel = document.getElementById('arp-gate-label');
 
     if (type === 'straight') {
       // Restore gate value
@@ -657,6 +657,9 @@ class MIDIController {
       if (sliderLabel) {
         sliderLabel.textContent = 'Amount';
       }
+      // Set a neutral gate length to prevent stale state
+      // (timing modes override this via getFixedGateLength, but this ensures consistency)
+      this.arpeggiator.setGateLength(0.5);
     }
 
     this.applyTimingStrategy();
