@@ -148,9 +148,12 @@ export class KeyboardInput {
     // Ignore repeated events for our app logic (but still prevent default above)
     if (this.pressedKeys.has(event.code)) return;
     
-    // Ignore if typing in input field
-    if (event.target instanceof HTMLInputElement || 
-        event.target instanceof HTMLTextAreaElement) return;
+    // Ignore if typing in a text-entry field (but allow non-text inputs like sliders/selects)
+    const target = event.target as HTMLElement;
+    if (target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLInputElement &&
+         ['text', 'search', 'email', 'password', 'url', 'tel', 'number'].includes(target.type)) ||
+        target.isContentEditable) return;
 
     this.pressedKeys.add(event.code);
 
