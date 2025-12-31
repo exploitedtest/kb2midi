@@ -534,6 +534,34 @@ describe('KeyboardInput', () => {
       document.body.removeChild(select);
     });
 
+    it('should block native keyboard behavior on select elements (expanded dropdown support)', () => {
+      // This ensures notes can play while a dropdown is open/expanded
+      const select = document.createElement('select');
+      const option1 = document.createElement('option');
+      option1.value = 'a';
+      option1.textContent = 'Option A';
+      const option2 = document.createElement('option');
+      option2.value = 'b';
+      option2.textContent = 'Option B';
+      select.appendChild(option1);
+      select.appendChild(option2);
+      document.body.appendChild(select);
+
+      const event = new KeyboardEvent('keydown', {
+        code: 'KeyA', // 'A' would normally trigger type-to-search in a select
+        bubbles: true,
+        cancelable: true
+      });
+
+      Object.defineProperty(event, 'target', { value: select, enumerable: true });
+      document.dispatchEvent(event);
+
+      // preventDefault should have been called to block native select behavior
+      expect(event.defaultPrevented).toBe(true);
+
+      document.body.removeChild(select);
+    });
+
     it('should ignore keydown events from password inputs', () => {
       keyboardInput.onNoteOn('KeyZ', noteOnHandler);
 
