@@ -124,10 +124,11 @@ export class UIController {
     });
 
     // Auto-blur non-text controls after interaction to return keyboard focus to instrument
-    document.querySelectorAll('select, input[type="range"], input[type="checkbox"]').forEach(element => {
+    document.querySelectorAll('select, input[type="range"], input[type="checkbox"], button').forEach(element => {
       const htmlElement = element as HTMLElement;
-      // Use 'change' for selects/checkboxes, 'input' would fire too often for range
-      element.addEventListener('change', () => {
+      // Use 'change' for selects/checkboxes/ranges, 'click' for buttons
+      const eventType = element.tagName === 'BUTTON' ? 'click' : 'change';
+      element.addEventListener(eventType, () => {
         htmlElement.blur();
       });
     });
