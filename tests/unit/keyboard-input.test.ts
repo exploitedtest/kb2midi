@@ -414,10 +414,11 @@ describe('KeyboardInput', () => {
   });
 
   describe('Input Field Filtering', () => {
-    it('should ignore keydown events from input fields', () => {
+    it('should ignore keydown events from text input fields', () => {
       keyboardInput.onNoteOn('KeyZ', noteOnHandler);
 
       const input = document.createElement('input');
+      input.type = 'text';
       document.body.appendChild(input);
 
       const event = new KeyboardEvent('keydown', {
@@ -450,6 +451,129 @@ describe('KeyboardInput', () => {
       expect(noteOnHandler).not.toHaveBeenCalled();
 
       document.body.removeChild(textarea);
+    });
+
+    it('should ignore keydown events from contenteditable elements', () => {
+      keyboardInput.onNoteOn('KeyZ', noteOnHandler);
+
+      const div = document.createElement('div');
+      div.contentEditable = 'true';
+      // jsdom may not set isContentEditable correctly, so mock it
+      Object.defineProperty(div, 'isContentEditable', { value: true, configurable: true });
+      document.body.appendChild(div);
+
+      const event = new KeyboardEvent('keydown', {
+        code: 'KeyZ',
+        bubbles: true
+      });
+
+      Object.defineProperty(event, 'target', { value: div, enumerable: true });
+      document.dispatchEvent(event);
+
+      expect(noteOnHandler).not.toHaveBeenCalled();
+
+      document.body.removeChild(div);
+    });
+
+    it('should allow keydown events from range inputs (sliders)', () => {
+      keyboardInput.onNoteOn('KeyZ', noteOnHandler);
+
+      const input = document.createElement('input');
+      input.type = 'range';
+      document.body.appendChild(input);
+
+      const event = new KeyboardEvent('keydown', {
+        code: 'KeyZ',
+        bubbles: true
+      });
+
+      Object.defineProperty(event, 'target', { value: input, enumerable: true });
+      document.dispatchEvent(event);
+
+      expect(noteOnHandler).toHaveBeenCalled();
+
+      document.body.removeChild(input);
+    });
+
+    it('should allow keydown events from checkbox inputs', () => {
+      keyboardInput.onNoteOn('KeyZ', noteOnHandler);
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      document.body.appendChild(input);
+
+      const event = new KeyboardEvent('keydown', {
+        code: 'KeyZ',
+        bubbles: true
+      });
+
+      Object.defineProperty(event, 'target', { value: input, enumerable: true });
+      document.dispatchEvent(event);
+
+      expect(noteOnHandler).toHaveBeenCalled();
+
+      document.body.removeChild(input);
+    });
+
+    it('should allow keydown events from select elements (when not expanded)', () => {
+      // Note: When a native <select> is expanded, browser takes full keyboard control.
+      // This is a browser limitation. Notes only play when dropdown is focused but closed.
+      keyboardInput.onNoteOn('KeyZ', noteOnHandler);
+
+      const select = document.createElement('select');
+      document.body.appendChild(select);
+
+      const event = new KeyboardEvent('keydown', {
+        code: 'KeyZ',
+        bubbles: true
+      });
+
+      Object.defineProperty(event, 'target', { value: select, enumerable: true });
+      document.dispatchEvent(event);
+
+      expect(noteOnHandler).toHaveBeenCalled();
+
+      document.body.removeChild(select);
+    });
+
+    it('should ignore keydown events from password inputs', () => {
+      keyboardInput.onNoteOn('KeyZ', noteOnHandler);
+
+      const input = document.createElement('input');
+      input.type = 'password';
+      document.body.appendChild(input);
+
+      const event = new KeyboardEvent('keydown', {
+        code: 'KeyZ',
+        bubbles: true
+      });
+
+      Object.defineProperty(event, 'target', { value: input, enumerable: true });
+      document.dispatchEvent(event);
+
+      expect(noteOnHandler).not.toHaveBeenCalled();
+
+      document.body.removeChild(input);
+    });
+
+    it('should ignore keydown events from email inputs', () => {
+      keyboardInput.onNoteOn('KeyZ', noteOnHandler);
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      const event = new KeyboardEvent('keydown', {
+        code: 'KeyZ',
+        bubbles: true
+      });
+
+      Object.defineProperty(event, 'target', { value: input, enumerable: true });
+      document.dispatchEvent(event);
+
+      expect(noteOnHandler).not.toHaveBeenCalled();
+
+      document.body.removeChild(input);
     });
   });
 

@@ -122,6 +122,7 @@ export class UIController {
         }
       });
     });
+    // Note: Dropdown keyboard behavior is disabled in keyboard-input.ts (capture phase)
   }
 
   /**

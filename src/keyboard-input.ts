@@ -148,15 +148,19 @@ export class KeyboardInput {
     // Ignore repeated events for our app logic (but still prevent default above)
     if (this.pressedKeys.has(event.code)) return;
     
-    // Ignore if typing in input field
-    if (event.target instanceof HTMLInputElement || 
-        event.target instanceof HTMLTextAreaElement) return;
+    // Ignore if typing in a text-entry field (but allow non-text inputs like sliders/selects)
+    const target = event.target as HTMLElement;
+    if (target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLInputElement &&
+         ['text', 'search', 'email', 'password', 'url', 'tel', 'number'].includes(target.type)) ||
+        target.isContentEditable) return;
 
     this.pressedKeys.add(event.code);
 
     // Check for special keys first
     if (this.specialKeyHandlers.has(event.code)) {
       event.preventDefault();
+      event.stopPropagation(); // Prevent reaching focused UI elements
       this.specialKeyHandlers.get(event.code)!();
       return;
     }
@@ -165,6 +169,7 @@ export class KeyboardInput {
     const noteOffset = this.currentLayout.keys[event.code];
     if (noteOffset !== undefined) {
       event.preventDefault();
+      event.stopPropagation(); // Prevent reaching focused UI elements
 
       // Latch mode: toggle behavior
       if (this.latchMode) {
@@ -188,21 +193,26 @@ export class KeyboardInput {
     // Check for octave control keys
     if (event.code === this.currentLayout.octaveDownKey) {
       event.preventDefault();
+      event.stopPropagation();
       this.specialKeyHandlers.get('octaveDown')?.();
     } else if (event.code === this.currentLayout.octaveUpKey) {
       event.preventDefault();
+      event.stopPropagation();
       this.specialKeyHandlers.get('octaveUp')?.();
     } else if (event.code === 'ArrowUp') {
       // Mod wheel full on while held
       event.preventDefault();
+      event.stopPropagation();
       this.specialKeyHandlers.get('modOn')?.();
     } else if (event.code === 'ArrowDown') {
       // Pitch bend full down while held
       event.preventDefault();
+      event.stopPropagation();
       this.specialKeyHandlers.get('pitchDownOn')?.();
     } else if (event.code === 'Tab') {
       // Arp division/rate boost while held
       event.preventDefault();
+      event.stopPropagation();
       this.specialKeyHandlers.get('arpBoostOn')?.();
     }
   }

@@ -27,11 +27,13 @@ npm run electron-serve         # Launch Electron app
 
 ### Day-1 Checklist
 
-1. `npm run setup` — lightweight install
+1. `npm run setup` — lightweight install **(MUST run before type-check)**
 2. `git fetch origin && git merge origin/main` — sync before edits
 3. `npm run type-check` — verify compilation
 4. `npm run test` — run unit tests
 5. `npm run dev` — start dev server on :8080 (if needed)
+
+> **⚠️ IMPORTANT**: Always run `npm run setup` before `npm run type-check`. The type-check will fail with `Cannot find namespace 'WebMidi'` errors if `@types/webmidi` is not installed. This is a dependency issue, not a code issue—do not attempt to fix these errors by modifying source files.
 
 ### Quick File Reference
 
@@ -58,6 +60,7 @@ npm run electron-serve         # Launch Electron app
 
 | Symptom | Check |
 |---------|-------|
+| `Cannot find namespace 'WebMidi'` type errors | Run `npm run setup` first—this installs `@types/webmidi` |
 | No MIDI ports | Create virtual MIDI port (IAC/loopMIDI), grant browser permissions |
 | Clock not syncing | Route DAW clock to selected clock port, verify in-app selector |
 | Arpeggiator silent | Enable toggle, hold notes, confirm clock running + beat indicator |
