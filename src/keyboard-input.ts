@@ -160,6 +160,7 @@ export class KeyboardInput {
     // Check for special keys first
     if (this.specialKeyHandlers.has(event.code)) {
       event.preventDefault();
+      event.stopPropagation(); // Prevent reaching focused UI elements
       this.specialKeyHandlers.get(event.code)!();
       return;
     }
@@ -168,6 +169,7 @@ export class KeyboardInput {
     const noteOffset = this.currentLayout.keys[event.code];
     if (noteOffset !== undefined) {
       event.preventDefault();
+      event.stopPropagation(); // Prevent reaching focused UI elements
 
       // Latch mode: toggle behavior
       if (this.latchMode) {
@@ -191,21 +193,26 @@ export class KeyboardInput {
     // Check for octave control keys
     if (event.code === this.currentLayout.octaveDownKey) {
       event.preventDefault();
+      event.stopPropagation();
       this.specialKeyHandlers.get('octaveDown')?.();
     } else if (event.code === this.currentLayout.octaveUpKey) {
       event.preventDefault();
+      event.stopPropagation();
       this.specialKeyHandlers.get('octaveUp')?.();
     } else if (event.code === 'ArrowUp') {
       // Mod wheel full on while held
       event.preventDefault();
+      event.stopPropagation();
       this.specialKeyHandlers.get('modOn')?.();
     } else if (event.code === 'ArrowDown') {
       // Pitch bend full down while held
       event.preventDefault();
+      event.stopPropagation();
       this.specialKeyHandlers.get('pitchDownOn')?.();
     } else if (event.code === 'Tab') {
       // Arp division/rate boost while held
       event.preventDefault();
+      event.stopPropagation();
       this.specialKeyHandlers.get('arpBoostOn')?.();
     }
   }
