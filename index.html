@@ -149,82 +149,97 @@
         </div>
         
         <div class="arpeggiator-controls" id="arpeggiator-controls" style="display: none;">
-            <div class="control-group">
-                <label>Pattern</label>
-                <select id="arp-pattern" tabindex="-1">
-                    <option value="up">Up</option>
-                    <option value="down">Down</option>
-                    <option value="up-down">Up-Down</option>
-                    <option value="down-up">Down-Up</option>
-                    <option value="random">Random</option>
-                    <option value="chord">Chord</option>
-                    <option value="stacked-chord">Stacked Chord</option>
-                    <option value="timeline">Timeline</option>
-                </select>
+            <!-- Row 1: Pattern -->
+            <div class="arp-row">
+                <div class="control-group">
+                    <label>Pattern</label>
+                    <div class="btn-group" id="arp-pattern" data-value="up">
+                        <button type="button" class="btn-group-item active" data-value="up" tabindex="-1">Up</button>
+                        <button type="button" class="btn-group-item" data-value="down" tabindex="-1">Down</button>
+                        <button type="button" class="btn-group-item" data-value="up-down" tabindex="-1">U-D</button>
+                        <button type="button" class="btn-group-item" data-value="down-up" tabindex="-1">D-U</button>
+                        <button type="button" class="btn-group-item" data-value="random" tabindex="-1">Rnd</button>
+                        <button type="button" class="btn-group-item" data-value="chord" tabindex="-1">Chrd</button>
+                        <button type="button" class="btn-group-item" data-value="stacked-chord" tabindex="-1">Stk</button>
+                        <button type="button" class="btn-group-item" data-value="timeline" tabindex="-1">Time</button>
+                    </div>
+                </div>
             </div>
-            <div class="control-group">
-                <label>Division</label>
-                <select id="arp-division" tabindex="-1">
-                    <option value="1">1</option>
-                    <option value="2">1/2</option>
-                    <option value="4" selected>1/4</option>
-                    <option value="8">1/8</option>
-                </select>
+            <!-- Row 2: Division + Timing -->
+            <div class="arp-row">
+                <div class="control-group">
+                    <label>Division</label>
+                    <div class="btn-group" id="arp-division" data-value="4">
+                        <button type="button" class="btn-group-item" data-value="1" tabindex="-1">1</button>
+                        <button type="button" class="btn-group-item" data-value="2" tabindex="-1">1/2</button>
+                        <button type="button" class="btn-group-item active" data-value="4" tabindex="-1">1/4</button>
+                        <button type="button" class="btn-group-item" data-value="8" tabindex="-1">1/8</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Timing</label>
+                    <div class="btn-group" id="arp-timing-type" data-value="straight">
+                        <button type="button" class="btn-group-item active" data-value="straight" tabindex="-1">Str</button>
+                        <button type="button" class="btn-group-item" data-value="swing" tabindex="-1">Swng</button>
+                        <button type="button" class="btn-group-item" data-value="shuffle" tabindex="-1">Shfl</button>
+                        <button type="button" class="btn-group-item" data-value="dotted" tabindex="-1">Dot</button>
+                    </div>
+                </div>
             </div>
-            <div class="control-group">
-                <label id="arp-gate-label" for="arp-gate">Gate</label>
-                <input type="range" id="arp-gate" min="0" max="100" value="50" tabindex="-1">
-                <span id="arp-gate-value">50%</span>
+            <!-- Row 3: Accent + Ratchet -->
+            <div class="arp-row">
+                <div class="control-group">
+                    <label>Accent</label>
+                    <div class="btn-group" id="arp-accent" data-value="none">
+                        <button type="button" class="btn-group-item active" data-value="none" tabindex="-1">None</button>
+                        <button type="button" class="btn-group-item" data-value="downbeats" tabindex="-1">Down</button>
+                        <button type="button" class="btn-group-item" data-value="offbeats" tabindex="-1">Up</button>
+                        <button type="button" class="btn-group-item" data-value="every-3rd" tabindex="-1">3rd</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Ratchet</label>
+                    <div class="btn-group" id="arp-ratchet" data-value="1">
+                        <button type="button" class="btn-group-item active" data-value="1" tabindex="-1">Off</button>
+                        <button type="button" class="btn-group-item" data-value="2" tabindex="-1">2x</button>
+                        <button type="button" class="btn-group-item" data-value="3" tabindex="-1">3x</button>
+                        <button type="button" class="btn-group-item" data-value="4" tabindex="-1">4x</button>
+                    </div>
+                </div>
             </div>
-            <div class="control-group">
-                <label for="arp-timing-type">Timing Feel</label>
-                <select id="arp-timing-type" tabindex="-1">
-                    <option value="straight">Straight</option>
-                    <option value="swing">Swing</option>
-                    <option value="shuffle">Shuffle (Triplet)</option>
-                    <option value="dotted">Dotted</option>
-                </select>
+            <!-- Row 4: Gate + Probability sliders -->
+            <div class="arp-row">
+                <div class="control-group">
+                    <label id="arp-gate-label" for="arp-gate">Gate</label>
+                    <input type="range" id="arp-gate" min="0" max="100" value="50" tabindex="-1">
+                    <span id="arp-gate-value">50%</span>
+                </div>
+                <div class="control-group">
+                    <label>Probability</label>
+                    <input type="range" id="arp-probability" min="0" max="100" value="100" tabindex="-1">
+                    <span id="arp-probability-value">100%</span>
+                </div>
             </div>
-            <div class="control-group">
-                <label>
-                    <input type="checkbox" id="arp-humanize" tabindex="-1">
-                    Humanize
-                </label>
-            </div>
-            <div class="control-group">
-                <label>
-                    <input type="checkbox" id="arp-humanize-velocity" tabindex="-1">
-                    Humanize Velocity
-                </label>
-            </div>
-            <div class="control-group">
-                <label for="arp-accent">Accent</label>
-                <select id="arp-accent" tabindex="-1">
-                    <option value="none">None</option>
-                    <option value="downbeats">Downbeats</option>
-                    <option value="offbeats">Offbeats</option>
-                    <option value="every-3rd">Every 3rd</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <label>Probability</label>
-                <input type="range" id="arp-probability" min="0" max="100" value="100" tabindex="-1">
-                <span id="arp-probability-value">100%</span>
-            </div>
-            <div class="control-group">
-                <label for="arp-ratchet">Ratchet</label>
-                <select id="arp-ratchet" tabindex="-1">
-                    <option value="1">Off</option>
-                    <option value="2">2x</option>
-                    <option value="3">3x</option>
-                    <option value="4">4x</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <label>
-                    <input type="checkbox" id="latch-mode" tabindex="-1">
-                    Latch Mode
-                </label>
+            <!-- Row 5: Checkboxes -->
+            <div class="arp-row">
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="arp-humanize" tabindex="-1">
+                        Humanize
+                    </label>
+                </div>
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="arp-humanize-velocity" tabindex="-1">
+                        Humanize Velocity
+                    </label>
+                </div>
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="latch-mode" tabindex="-1">
+                        Latch Mode
+                    </label>
+                </div>
             </div>
         </div>
     </div>

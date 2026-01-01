@@ -19,7 +19,7 @@ import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
 interface ControlConfig {
   id: string;
   setter: (value: string) => void;
-  type?: 'select' | 'range' | 'button' | 'checkbox';
+  type?: 'select' | 'range' | 'button' | 'checkbox' | 'btn-group';
   displayId?: string; // For range controls that show values
   displayFormatter?: (value: number) => string;
 }
@@ -370,8 +370,7 @@ class MIDIController {
       const boosted = Math.min(this.arpBoostBaseDivisor * 2, 8);
       if (boosted !== state.clockDivisor) {
         this.arpeggiator.setClockDivisor(boosted);
-        const sel = document.getElementById('arp-division') as HTMLSelectElement | null;
-        if (sel) sel.value = String(boosted);
+        this.updateButtonGroupValue('arp-division', String(boosted));
       }
       this.arpBoostActive = true;
     });
@@ -379,8 +378,7 @@ class MIDIController {
       if (!this.arpBoostActive) return;
       const base = this.arpBoostBaseDivisor ?? this.arpeggiator.getState().clockDivisor;
       this.arpeggiator.setClockDivisor(base);
-      const sel = document.getElementById('arp-division') as HTMLSelectElement | null;
-      if (sel) sel.value = String(base);
+      this.updateButtonGroupValue('arp-division', String(base));
       this.arpBoostActive = false;
       this.arpBoostBaseDivisor = null;
     });
@@ -434,18 +432,18 @@ class MIDIController {
         type: 'button'
       },
       
-      // Arpeggiator pattern
+      // Arpeggiator pattern (button group)
       {
         id: 'arp-pattern',
         setter: (value) => this.arpeggiator.setPattern(value as ArpeggiatorPattern),
-        type: 'select'
+        type: 'btn-group'
       },
-      
-      // Arpeggiator division
+
+      // Arpeggiator division (button group)
       {
         id: 'arp-division',
         setter: (value) => this.arpeggiator.setClockDivisor(parseInt(value)),
-        type: 'select'
+        type: 'btn-group'
       },
       
       // Arpeggiator timing amount (controls gate in straight mode, delay+gate in timing modes)
@@ -468,13 +466,13 @@ class MIDIController {
         displayFormatter: (value) => `${value}%`
       },
 
-      // Arpeggiator timing type
+      // Arpeggiator timing type (button group)
       {
         id: 'arp-timing-type',
         setter: (value) => {
           this.updateTimingType(value as 'straight' | 'swing' | 'shuffle' | 'dotted');
         },
-        type: 'select'
+        type: 'btn-group'
       },
 
       // Humanize toggle
@@ -495,13 +493,13 @@ class MIDIController {
         type: 'checkbox'
       },
 
-      // Accent pattern
+      // Accent pattern (button group)
       {
         id: 'arp-accent',
         setter: (value) => {
           this.updateAccentPattern(value as 'none' | 'downbeats' | 'offbeats' | 'every-3rd');
         },
-        type: 'select'
+        type: 'btn-group'
       },
 
       // Gate probability
@@ -516,13 +514,13 @@ class MIDIController {
         displayFormatter: (value) => `${value}%`
       },
 
-      // Ratchet count
+      // Ratchet count (button group)
       {
         id: 'arp-ratchet',
         setter: (value) => {
           this.updateRatchetCount(parseInt(value));
         },
-        type: 'select'
+        type: 'btn-group'
       },
 
       // Latch mode
@@ -587,12 +585,35 @@ class MIDIController {
         return;
       }
 
+      // Handle button groups specially
+      if (config.type === 'btn-group') {
+        const buttons = element.querySelectorAll('.btn-group-item');
+        buttons.forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const button = btn as HTMLButtonElement;
+            const value = button.dataset.value || '';
+
+            // Update active state
+            buttons.forEach(b => b.classList.remove('active'));
+            button.classList.add('active');
+
+            // Update container data-value
+            element.dataset.value = value;
+
+            // Call setter
+            config.setter(value);
+          });
+        });
+        return;
+      }
+
       // Use appropriate event per control type (mobile + desktop friendly)
       const eventType =
         config.type === 'range' ? 'input' :
         config.type === 'button' ? 'click' :
         'change';
-      
+
       // Wire the main control event
       element.addEventListener(eventType, () => {
         let value: string;
@@ -619,6 +640,26 @@ class MIDIController {
           }
         }
       });
+    });
+  }
+
+  /**
+   * Updates a button group's visual state to reflect a new value
+   * @param groupId - The ID of the button group container
+   * @param value - The value to select
+   */
+  private updateButtonGroupValue(groupId: string, value: string): void {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+
+    const buttons = group.querySelectorAll('.btn-group-item');
+    buttons.forEach(btn => {
+      const button = btn as HTMLButtonElement;
+      if (button.dataset.value === value) {
+        buttons.forEach(b => b.classList.remove('active'));
+        button.classList.add('active');
+        group.dataset.value = value;
+      }
     });
   }
 

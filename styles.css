@@ -251,6 +251,59 @@ body {
     opacity: 0.8;
 }
 
+/* Button Group - horizontal toggle buttons replacing dropdowns */
+.btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+}
+
+.btn-group-item {
+    background: var(--control-bg);
+    border: 1px solid var(--control-border);
+    color: var(--text-color);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    min-width: 36px;
+    text-align: center;
+    user-select: none;
+}
+
+.btn-group-item:hover {
+    background: var(--button-hover-bg);
+    border-color: var(--panel-border-strong);
+}
+
+.btn-group-item.active {
+    background: rgba(76, 175, 80, 0.4);
+    border-color: #4CAF50;
+    color: #ffffff;
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.4);
+}
+
+.btn-group-item:focus {
+    outline: none;
+}
+
+/* Arpeggiator controls row layout */
+.arp-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    width: 100%;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.arp-row .control-group {
+    flex: 0 1 auto;
+}
+
 .controls {
     display: flex;
     gap: 20px;
