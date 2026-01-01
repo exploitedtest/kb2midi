@@ -249,7 +249,15 @@ export class ClockSync {
     }
 
     this.state.source = source;
-    this.state.status = source === 'off' ? 'stopped' : this.state.status;
+
+    // Reset running state when switching to a source with no active clock
+    if (source === 'internal' || source === 'off') {
+      this.state.isRunning = false;
+      this.state.status = 'stopped';
+    } else {
+      // For external, keep current status (might reconnect to running external clock)
+      this.state.status = this.state.isRunning ? 'synced' : 'stopped';
+    }
   }
 
   /**

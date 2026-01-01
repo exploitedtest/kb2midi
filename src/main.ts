@@ -1357,6 +1357,14 @@ class MIDIController {
       internalControls.style.display = source === 'internal' ? 'block' : 'none';
     }
 
+    // Update button text when switching to internal mode
+    if (source === 'internal') {
+      const button = document.getElementById('internal-clock-toggle');
+      if (button) {
+        button.textContent = this.clockSync.isInternalClockRunning() ? 'Stop' : 'Start';
+      }
+    }
+
     // Update status message
     if (source === 'internal') {
       this.uiController.updateStatus('Internal Master Clock Selected', 'info');
@@ -1381,7 +1389,9 @@ class MIDIController {
     const button = document.getElementById('internal-clock-toggle');
     if (!button) return;
 
-    if (this.clockSync.isRunning()) {
+    // Use isInternalClockRunning() to check specifically if internal clock is active
+    // (not isRunning() which could be true from external MIDI clock)
+    if (this.clockSync.isInternalClockRunning()) {
       this.clockSync.stopInternalClock();
       button.textContent = 'Start';
       this.uiController.updateStatus('Internal Clock Stopped', 'info');

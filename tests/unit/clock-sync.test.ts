@@ -293,5 +293,36 @@ describe('ClockSync', () => {
       // Should have roughly double the ticks
       expect(ticks240).toBeGreaterThan(ticks120 * 1.8); // Allow some tolerance
     });
+
+    it('should reset isRunning when switching from external to internal source', () => {
+      // Simulate external clock running
+      clockSync.onMIDIStart();
+      expect(clockSync.isRunning()).toBe(true);
+
+      // Switch to internal source
+      clockSync.setClockSource('internal');
+
+      // isRunning should be reset because internal clock hasn't started yet
+      expect(clockSync.isRunning()).toBe(false);
+      expect(clockSync.isInternalClockRunning()).toBe(false);
+
+      // Now start internal clock
+      clockSync.startInternalClock();
+      expect(clockSync.isRunning()).toBe(true);
+      expect(clockSync.isInternalClockRunning()).toBe(true);
+    });
+
+    it('should reset isRunning when switching to off source', () => {
+      // Simulate external clock running
+      clockSync.onMIDIStart();
+      expect(clockSync.isRunning()).toBe(true);
+
+      // Switch to off
+      clockSync.setClockSource('off');
+
+      // isRunning should be reset
+      expect(clockSync.isRunning()).toBe(false);
+      expect(clockSync.getStatus()).toBe('stopped');
+    });
   });
 });
