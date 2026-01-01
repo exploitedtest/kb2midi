@@ -68,8 +68,14 @@
         <div class="control-group">
             <label for="midi-clock-input">Clock Input</label>
             <select id="midi-clock-input" tabindex="-1">
-                <option value="auto">Auto (Best)</option>
+                <option value="internal">Internal</option>
+                <option value="auto">Auto (External)</option>
             </select>
+        </div>
+
+        <div class="control-group internal-bpm-control" id="internal-bpm-control">
+            <label for="internal-bpm">BPM: <span id="internal-bpm-value">120</span></label>
+            <input type="range" id="internal-bpm" min="20" max="240" value="120" step="1" tabindex="-1">
         </div>
 
         <div class="control-group">

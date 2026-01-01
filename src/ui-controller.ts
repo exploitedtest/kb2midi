@@ -26,6 +26,8 @@ export class UIController {
   private clockStatusElement: HTMLElement;
   private midiClockInputSelect: HTMLSelectElement | null = null;
   private midiNoteInputSelect: HTMLSelectElement | null = null;
+  private internalBpmSlider: HTMLInputElement | null = null;
+  private internalBpmControl: HTMLElement | null = null;
   private beatIndicatorTimeout?: ReturnType<typeof setTimeout>; // Store timeout to prevent overlapping pulses
   private modIndicator: HTMLElement | null = null;
   private pitchIndicator: HTMLElement | null = null;
@@ -61,6 +63,8 @@ export class UIController {
     this.clockStatusElement = document.getElementById('clock-status')!;
     this.midiClockInputSelect = document.getElementById('midi-clock-input') as HTMLSelectElement | null;
     this.midiNoteInputSelect = document.getElementById('midi-note-input') as HTMLSelectElement | null;
+    this.internalBpmSlider = document.getElementById('internal-bpm') as HTMLInputElement | null;
+    this.internalBpmControl = document.getElementById('internal-bpm-control');
     this.modIndicator = document.getElementById('mod-indicator');
     this.pitchIndicator = document.getElementById('pitch-indicator');
     this.octaveDownIndicator = document.getElementById('octave-down-indicator');
@@ -640,18 +644,23 @@ export class UIController {
    * Updates the clock sync status display
    * @param status - The current clock sync status
    * @param bpm - Optional BPM to display
+   * @param isInternal - Whether using internal clock (shows "Internal Clock" instead of "Synced to DAW")
    */
-  updateClockStatus(status: 'synced' | 'free' | 'stopped', bpm?: number): void {
+  updateClockStatus(status: 'synced' | 'free' | 'stopped', bpm?: number, isInternal?: boolean): void {
     if (!this.clockStatusElement) return;
-    
+
     let icon: string;
     let text: string;
     let className: string;
-    
+
     switch (status) {
       case 'synced':
         icon = '🟢';
-        text = bpm ? `Synced to DAW (${Math.round(bpm)} BPM)` : 'Synced to DAW';
+        if (isInternal) {
+          text = bpm ? `Internal Clock (${Math.round(bpm)} BPM)` : 'Internal Clock';
+        } else {
+          text = bpm ? `Synced to DAW (${Math.round(bpm)} BPM)` : 'Synced to DAW';
+        }
         className = 'clock-status synced';
         break;
       case 'free':
@@ -865,15 +874,24 @@ export class UIController {
   /**
    * Populate the MIDI Clock Input dropdown
    */
-  populateClockInputs(inputs: { id: string; name: string }[], selected: string = 'auto'): void {
+  populateClockInputs(inputs: { id: string; name: string }[], selected: string = 'internal'): void {
     if (!this.midiClockInputSelect) return;
     const select = this.midiClockInputSelect;
     select.innerHTML = '';
+
+    // Add Internal clock option first
+    const internalOption = document.createElement('option');
+    internalOption.value = 'internal';
+    internalOption.textContent = 'Internal';
+    select.appendChild(internalOption);
+
+    // Add Auto (external) option
     const autoOption = document.createElement('option');
     autoOption.value = 'auto';
-    autoOption.textContent = 'Auto (Best)';
+    autoOption.textContent = 'Auto (External)';
     select.appendChild(autoOption);
 
+    // Add external MIDI inputs
     inputs.forEach(inp => {
       const opt = document.createElement('option');
       opt.value = inp.id;
@@ -882,8 +900,8 @@ export class UIController {
     });
 
     // Validate that selected value exists in options before setting
-    const validIds = ['auto', ...inputs.map(i => i.id)];
-    select.value = validIds.includes(selected) ? selected : 'auto';
+    const validIds = ['internal', 'auto', ...inputs.map(i => i.id)];
+    select.value = validIds.includes(selected) ? selected : 'internal';
   }
 
   /**
@@ -928,6 +946,55 @@ export class UIController {
     if (!this.midiNoteInputSelect) return;
     this.midiNoteInputSelect.addEventListener('change', () => {
       handler(this.midiNoteInputSelect!.value);
+    });
+  }
+
+  /**
+   * Shows or hides the internal BPM control
+   * @param visible - Whether to show the control
+   */
+  setInternalBpmVisible(visible: boolean): void {
+    if (this.internalBpmControl) {
+      this.internalBpmControl.style.display = visible ? 'block' : 'none';
+    }
+  }
+
+  /**
+   * Gets the current internal BPM slider value
+   */
+  getInternalBpm(): number {
+    if (!this.internalBpmSlider) return 120;
+    const parsed = parseInt(this.internalBpmSlider.value, 10);
+    return isNaN(parsed) ? 120 : parsed;
+  }
+
+  /**
+   * Sets the internal BPM slider value
+   */
+  setInternalBpm(bpm: number): void {
+    if (this.internalBpmSlider) {
+      this.internalBpmSlider.value = String(bpm);
+      const display = document.getElementById('internal-bpm-value');
+      if (display) {
+        display.textContent = String(bpm);
+      }
+    }
+  }
+
+  /**
+   * Listen for internal BPM slider changes
+   */
+  onInternalBpmChange(handler: (bpm: number) => void): void {
+    if (!this.internalBpmSlider) return;
+    this.internalBpmSlider.addEventListener('input', () => {
+      const parsed = parseInt(this.internalBpmSlider!.value, 10);
+      const bpm = isNaN(parsed) ? 120 : parsed;
+      // Update display
+      const display = document.getElementById('internal-bpm-value');
+      if (display) {
+        display.textContent = String(bpm);
+      }
+      handler(bpm);
     });
   }
 
