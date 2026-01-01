@@ -644,18 +644,23 @@ export class UIController {
    * Updates the clock sync status display
    * @param status - The current clock sync status
    * @param bpm - Optional BPM to display
+   * @param isInternal - Whether using internal clock (shows "Internal Clock" instead of "Synced to DAW")
    */
-  updateClockStatus(status: 'synced' | 'free' | 'stopped', bpm?: number): void {
+  updateClockStatus(status: 'synced' | 'free' | 'stopped', bpm?: number, isInternal?: boolean): void {
     if (!this.clockStatusElement) return;
-    
+
     let icon: string;
     let text: string;
     let className: string;
-    
+
     switch (status) {
       case 'synced':
         icon = '🟢';
-        text = bpm ? `Synced to DAW (${Math.round(bpm)} BPM)` : 'Synced to DAW';
+        if (isInternal) {
+          text = bpm ? `Internal Clock (${Math.round(bpm)} BPM)` : 'Internal Clock';
+        } else {
+          text = bpm ? `Synced to DAW (${Math.round(bpm)} BPM)` : 'Synced to DAW';
+        }
         className = 'clock-status synced';
         break;
       case 'free':

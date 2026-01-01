@@ -154,7 +154,7 @@ class MIDIController {
     this.uiController.onInternalBpmChange((bpm) => {
       this.clockSync.setInternalClockBPM(bpm);
       if (this.clockSync.isInternalClockRunning()) {
-        this.uiController.updateClockStatus('synced', bpm);
+        this.uiController.updateClockStatus('synced', bpm, true);
       }
     });
 
@@ -1210,7 +1210,7 @@ class MIDIController {
         const bpm = this.uiController.getInternalBpm();
         this.clockSync.startInternalClock(bpm);
         this.uiController.setInternalBpmVisible(true);
-        this.uiController.updateClockStatus('synced', bpm);
+        this.uiController.updateClockStatus('synced', bpm, true);
       } else if (this.preferredClockInputId === 'auto') {
         this.midiEngine.selectBestClockInput();
       } else {
@@ -1328,7 +1328,7 @@ class MIDIController {
       // Start internal clock with current BPM
       const bpm = this.uiController.getInternalBpm();
       this.clockSync.startInternalClock(bpm);
-      this.uiController.updateClockStatus('synced', bpm);
+      this.uiController.updateClockStatus('synced', bpm, true);
       return;
     }
 
