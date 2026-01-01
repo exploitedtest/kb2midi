@@ -26,6 +26,9 @@ export class UIController {
   private clockStatusElement: HTMLElement;
   private midiClockInputSelect: HTMLSelectElement | null = null;
   private midiNoteInputSelect: HTMLSelectElement | null = null;
+  private clockSourceSelect: HTMLSelectElement | null = null;
+  private internalBPMInput: HTMLInputElement | null = null;
+  private internalClockToggle: HTMLButtonElement | null = null;
   private beatIndicatorTimeout?: ReturnType<typeof setTimeout>; // Store timeout to prevent overlapping pulses
   private modIndicator: HTMLElement | null = null;
   private pitchIndicator: HTMLElement | null = null;
@@ -61,6 +64,9 @@ export class UIController {
     this.clockStatusElement = document.getElementById('clock-status')!;
     this.midiClockInputSelect = document.getElementById('midi-clock-input') as HTMLSelectElement | null;
     this.midiNoteInputSelect = document.getElementById('midi-note-input') as HTMLSelectElement | null;
+    this.clockSourceSelect = document.getElementById('clock-source') as HTMLSelectElement | null;
+    this.internalBPMInput = document.getElementById('internal-bpm') as HTMLInputElement | null;
+    this.internalClockToggle = document.getElementById('internal-clock-toggle') as HTMLButtonElement | null;
     this.modIndicator = document.getElementById('mod-indicator');
     this.pitchIndicator = document.getElementById('pitch-indicator');
     this.octaveDownIndicator = document.getElementById('octave-down-indicator');
@@ -928,6 +934,39 @@ export class UIController {
     if (!this.midiNoteInputSelect) return;
     this.midiNoteInputSelect.addEventListener('change', () => {
       handler(this.midiNoteInputSelect!.value);
+    });
+  }
+
+  /**
+   * Register handler for clock source changes
+   */
+  onClockSourceChange(handler: (source: string) => void): void {
+    if (!this.clockSourceSelect) return;
+    this.clockSourceSelect.addEventListener('change', () => {
+      handler(this.clockSourceSelect!.value);
+    });
+  }
+
+  /**
+   * Register handler for internal BPM changes
+   */
+  onInternalBPMChange(handler: (bpm: number) => void): void {
+    if (!this.internalBPMInput) return;
+    this.internalBPMInput.addEventListener('change', () => {
+      const bpm = parseInt(this.internalBPMInput!.value);
+      if (!isNaN(bpm)) {
+        handler(bpm);
+      }
+    });
+  }
+
+  /**
+   * Register handler for internal clock toggle
+   */
+  onInternalClockToggle(handler: () => void): void {
+    if (!this.internalClockToggle) return;
+    this.internalClockToggle.addEventListener('click', () => {
+      handler();
     });
   }
 

@@ -13,7 +13,7 @@ import {
   VelocityHumanize
 } from './arpeggiator';
 import { ScaleFilter } from './scale-filter';
-import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
+import { ControllerState, ArpeggiatorPattern, ClockSource, MIDI_MOD_WHEEL } from './types';
 
 // Enhanced control configuration with better type safety
 interface ControlConfig {
@@ -42,6 +42,10 @@ class MIDIController {
   // Prevents overlapping resume calls
   private resuming = false;
   private preferredClockInputId: string = 'auto';
+  // Internal clock state for resume
+  private internalClockWasRunning: boolean = false;
+  private savedClockSource: ClockSource = 'external';
+  private savedInternalBPM: number = 120;
   // Momentary arpeggiator rate boost state (Tab key)
   private arpBoostActive: boolean = false;
   private arpBoostBaseDivisor: number | null = null;
@@ -149,6 +153,11 @@ class MIDIController {
     // Populate clock inputs and wire selection
     this.refreshClockInputs();
     this.uiController.onClockInputChange((id) => this.handleClockInputSelect(id));
+
+    // Wire clock source selection
+    this.uiController.onClockSourceChange((source) => this.handleClockSourceChange(source as ClockSource));
+    this.uiController.onInternalBPMChange((bpm) => this.handleInternalBPMChange(bpm));
+    this.uiController.onInternalClockToggle(() => this.handleInternalClockToggle());
 
     // Populate note input sources and wire selection
     this.refreshNoteInputSources();
@@ -1128,20 +1137,25 @@ class MIDIController {
   cleanup(): void {
     // Stop all active notes
     this.stopAllNotes();
-    
+
+    // Save internal clock state for resume
+    this.savedClockSource = this.clockSync.getClockSource();
+    this.internalClockWasRunning = this.clockSync.isInternalClockRunning();
+    this.savedInternalBPM = this.clockSync.getBPM();
+
     // Clean up MIDI engine
     this.midiEngine.cleanup();
-    
+
     // Clean up keyboard input
     this.keyboardInput.cleanup();
-    
+
     // Clean up arpeggiator
     this.arpeggiator.setEnabled(false);
     this.arpeggiator.clearStepCallbacks();
-    
-    // Clean up clock sync callbacks
+
+    // Clean up clock sync callbacks (also stops internal clock)
     this.clockSync.clearCallbacks();
-    
+
     // Clear local state
     this.state.activeNotes.clear();
     this.state.sustainedNotes.clear();
@@ -1221,6 +1235,21 @@ class MIDIController {
         } else {
           this.handleNoteInputSelect('keyboard');
         }
+      }
+
+      // Restore internal clock state
+      if (this.savedClockSource !== 'external') {
+        this.clockSync.setClockSource(this.savedClockSource);
+        if (this.savedClockSource === 'internal') {
+          this.clockSync.setInternalBPM(this.savedInternalBPM);
+          if (this.internalClockWasRunning) {
+            this.clockSync.startInternalClock();
+            const button = document.getElementById('internal-clock-toggle');
+            if (button) button.textContent = 'Stop';
+          }
+        }
+        // Update UI visibility
+        this.handleClockSourceChange(this.savedClockSource);
       }
 
       if (midiReady) {
@@ -1310,6 +1339,66 @@ class MIDIController {
       this.midiEngine.selectBestClockInput();
       this.preferredClockInputId = 'auto';
       this.refreshClockInputs();
+    }
+  }
+
+  /**
+   * Handle clock source change (external, internal, off)
+   */
+  private handleClockSourceChange(source: ClockSource): void {
+    this.clockSync.setClockSource(source);
+
+    // Update UI visibility
+    const externalControls = document.getElementById('external-clock-controls');
+    const internalControls = document.getElementById('internal-clock-controls');
+
+    if (externalControls && internalControls) {
+      externalControls.style.display = source === 'external' ? 'block' : 'none';
+      internalControls.style.display = source === 'internal' ? 'block' : 'none';
+    }
+
+    // Update button text when switching to internal mode
+    if (source === 'internal') {
+      const button = document.getElementById('internal-clock-toggle');
+      if (button) {
+        button.textContent = this.clockSync.isInternalClockRunning() ? 'Stop' : 'Start';
+      }
+    }
+
+    // Update status message
+    if (source === 'internal') {
+      this.uiController.updateStatus('Internal Master Clock Selected', 'info');
+    } else if (source === 'off') {
+      this.uiController.updateStatus('Clock Disabled', 'info');
+    } else {
+      this.uiController.updateStatus('External MIDI Clock Selected', 'info');
+    }
+  }
+
+  /**
+   * Handle internal clock BPM change
+   */
+  private handleInternalBPMChange(bpm: number): void {
+    this.clockSync.setInternalBPM(bpm);
+  }
+
+  /**
+   * Handle internal clock start/stop toggle
+   */
+  private handleInternalClockToggle(): void {
+    const button = document.getElementById('internal-clock-toggle');
+    if (!button) return;
+
+    // Use isInternalClockRunning() to check specifically if internal clock is active
+    // (not isRunning() which could be true from external MIDI clock)
+    if (this.clockSync.isInternalClockRunning()) {
+      this.clockSync.stopInternalClock();
+      button.textContent = 'Start';
+      this.uiController.updateStatus('Internal Clock Stopped', 'info');
+    } else {
+      this.clockSync.startInternalClock();
+      button.textContent = 'Stop';
+      this.uiController.updateStatus('Internal Clock Running', 'success');
     }
   }
 
