@@ -1,8 +1,10 @@
 import { ClockSyncState } from './types';
 
+export type ClockSource = 'external' | 'internal';
+
 /**
- * Handles external MIDI clock synchronization
- * Receives MIDI clock messages from DAW and provides timing events for arpeggiator
+ * Handles both external MIDI clock synchronization and internal clock generation
+ * Receives MIDI clock messages from DAW or generates internal clock for arpeggiator
  */
 export class ClockSync {
   private state: ClockSyncState = {
@@ -12,6 +14,11 @@ export class ClockSync {
     status: 'stopped',
     lastTickTime: -1 // -1 sentinel so the first interval is measured on the second tick
   };
+
+  private clockSource: ClockSource = 'external';
+  private internalBPM: number = 120;
+  private internalClockInterval: ReturnType<typeof setInterval> | null = null;
+  private internalTickInterval: number = 0; // Interval in ms between ticks
 
   private onTickCallbacks: (() => void)[] = [];
   private onQuarterNoteCallbacks: (() => void)[] = [];
@@ -203,5 +210,109 @@ export class ClockSync {
     this.onSixteenthNoteCallbacks = [];
     this.onStartCallbacks = [];
     this.onStopCallbacks = [];
+  }
+
+  /**
+   * Sets the clock source (external MIDI or internal)
+   */
+  setClockSource(source: ClockSource): void {
+    if (this.clockSource === source) return;
+
+    // Stop current clock if running
+    if (this.clockSource === 'internal' && this.state.isRunning) {
+      this.stopInternalClock();
+    }
+
+    this.clockSource = source;
+
+    // Reset state when switching
+    this.state.isRunning = false;
+    this.state.ticks = 0;
+    this.state.status = 'stopped';
+    this.state.lastTickTime = -1;
+    this.tickIntervals = [];
+  }
+
+  /**
+   * Gets the current clock source
+   */
+  getClockSource(): ClockSource {
+    return this.clockSource;
+  }
+
+  /**
+   * Sets the internal clock BPM and updates the running clock if active
+   */
+  setInternalBPM(bpm: number): void {
+    this.internalBPM = Math.max(20, Math.min(240, Math.round(bpm)));
+    this.state.bpm = this.internalBPM;
+
+    // Update tick interval calculation
+    // MIDI clock: 24 ticks per quarter note
+    // Tick interval = (60 / BPM) * 1000 / 24
+    this.internalTickInterval = (60 / this.internalBPM) * 1000 / 24;
+
+    // If internal clock is running, restart it with new BPM
+    if (this.clockSource === 'internal' && this.state.isRunning) {
+      this.stopInternalClock();
+      this.startInternalClock();
+    }
+  }
+
+  /**
+   * Gets the current internal BPM
+   */
+  getInternalBPM(): number {
+    return this.internalBPM;
+  }
+
+  /**
+   * Starts the internal clock generator
+   */
+  startInternalClock(): void {
+    if (this.clockSource !== 'internal') return;
+    if (this.internalClockInterval !== null) return; // Already running
+
+    // Calculate tick interval
+    this.internalTickInterval = (60 / this.internalBPM) * 1000 / 24;
+
+    // Reset state
+    this.state.isRunning = true;
+    this.state.ticks = 0;
+    this.state.status = 'synced'; // Internal clock is always "synced" to itself
+    this.state.bpm = this.internalBPM;
+    this.state.lastTickTime = -1;
+
+    // Trigger start callbacks
+    this.onStartCallbacks.forEach(callback => callback());
+
+    // Start generating ticks
+    this.internalClockInterval = setInterval(() => {
+      this.onMIDIClockTick(performance.now());
+    }, this.internalTickInterval);
+  }
+
+  /**
+   * Stops the internal clock generator
+   */
+  stopInternalClock(): void {
+    if (this.internalClockInterval !== null) {
+      clearInterval(this.internalClockInterval);
+      this.internalClockInterval = null;
+    }
+
+    this.state.isRunning = false;
+    this.state.status = 'stopped';
+    this.state.lastTickTime = -1;
+
+    // Trigger stop callbacks
+    this.onStopCallbacks.forEach(callback => callback());
+  }
+
+  /**
+   * Checks if internal clock is running
+   */
+  isInternalClockRunning(): boolean {
+    return this.clockSource === 'internal' && this.internalClockInterval !== null;
   }
 } 

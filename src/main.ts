@@ -402,6 +402,16 @@ class MIDIController {
       }
     });
 
+    // Clock source change handler
+    this.uiController.onClockSourceChange((source) => {
+      this.handleClockSourceChange(source);
+    });
+
+    // Internal BPM change handler
+    this.uiController.onInternalBPMChange((bpm) => {
+      this.clockSync.setInternalBPM(bpm);
+    });
+
     // Unified control configurations
     const controlConfigs: ControlConfig[] = [
       // Panic button
@@ -912,31 +922,42 @@ class MIDIController {
   private toggleArpeggiator(): void {
     const enabled = !this.arpeggiator.isEnabled();
     const currentNotes = Array.from(this.state.activeNotes.values());
-    
+
     if (enabled) {
       // Enabling arpeggiator: stop any immediately playing notes, let clock take over
       currentNotes.forEach(activeNote => {
         const ch = activeNote.channel ?? this.uiController.getMidiChannel();
         this.midiEngine.stopNote(activeNote.note, 0, ch);
       });
-      
+
       this.arpeggiator.setEnabled(enabled);
       // Add notes to arpeggiator in the order they're currently held
       // Note: This preserves the order from activeNotes Map iteration
       currentNotes.forEach(activeNote => {
         this.arpeggiator.addNote(activeNote.note);
       });
+
+      // Start internal clock if using internal clock source
+      if (this.clockSync.getClockSource() === 'internal') {
+        this.clockSync.startInternalClock();
+      }
+
       this.uiController.updateStatus('Arpeggiator Enabled - Clock Driven', 'success');
     } else {
       // Disabling arpeggiator: clear arpeggiator and immediately play all held notes
       this.arpeggiator.setEnabled(enabled);
       this.arpeggiator.clearNotes();
-      
+
+      // Stop internal clock if running
+      if (this.clockSync.getClockSource() === 'internal') {
+        this.clockSync.stopInternalClock();
+      }
+
       currentNotes.forEach(activeNote => {
         const ch = activeNote.channel ?? this.uiController.getMidiChannel();
         this.midiEngine.playNote(activeNote.note, activeNote.velocity, ch);
       });
-      
+
       this.uiController.updateStatus('Arpeggiator Disabled', 'info');
     }
   }
@@ -1311,6 +1332,32 @@ class MIDIController {
       this.preferredClockInputId = 'auto';
       this.refreshClockInputs();
     }
+  }
+
+  /**
+   * Handle clock source change (external MIDI vs internal clock)
+   */
+  private handleClockSourceChange(source: 'external' | 'internal'): void {
+    this.clockSync.setClockSource(source);
+
+    if (source === 'internal') {
+      // Start internal clock if arpeggiator is enabled
+      if (this.arpeggiator.isEnabled()) {
+        this.clockSync.startInternalClock();
+      }
+      // Update clock status to show internal clock BPM
+      const bpm = this.clockSync.getInternalBPM();
+      this.uiController.updateClockStatus('synced', bpm);
+    } else {
+      // Stop internal clock if running
+      this.clockSync.stopInternalClock();
+      // Update clock status based on external clock state
+      const status = this.clockSync.isRunning() ? 'synced' : 'stopped';
+      const bpm = this.clockSync.isRunning() ? this.clockSync.getBPM() : undefined;
+      this.uiController.updateClockStatus(status, bpm);
+    }
+
+    this.updateArpeggiatorButtonText();
   }
 
   /**

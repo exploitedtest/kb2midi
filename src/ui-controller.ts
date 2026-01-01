@@ -26,6 +26,10 @@ export class UIController {
   private clockStatusElement: HTMLElement;
   private midiClockInputSelect: HTMLSelectElement | null = null;
   private midiNoteInputSelect: HTMLSelectElement | null = null;
+  private clockSourceSelect: HTMLSelectElement | null = null;
+  private internalBPMSlider: HTMLInputElement | null = null;
+  private externalClockControls: HTMLElement | null = null;
+  private internalClockControls: HTMLElement | null = null;
   private beatIndicatorTimeout?: ReturnType<typeof setTimeout>; // Store timeout to prevent overlapping pulses
   private modIndicator: HTMLElement | null = null;
   private pitchIndicator: HTMLElement | null = null;
@@ -61,6 +65,10 @@ export class UIController {
     this.clockStatusElement = document.getElementById('clock-status')!;
     this.midiClockInputSelect = document.getElementById('midi-clock-input') as HTMLSelectElement | null;
     this.midiNoteInputSelect = document.getElementById('midi-note-input') as HTMLSelectElement | null;
+    this.clockSourceSelect = document.getElementById('clock-source') as HTMLSelectElement | null;
+    this.internalBPMSlider = document.getElementById('internal-bpm') as HTMLInputElement | null;
+    this.externalClockControls = document.getElementById('external-clock-controls');
+    this.internalClockControls = document.getElementById('internal-clock-controls');
     this.modIndicator = document.getElementById('mod-indicator');
     this.pitchIndicator = document.getElementById('pitch-indicator');
     this.octaveDownIndicator = document.getElementById('octave-down-indicator');
@@ -113,6 +121,22 @@ export class UIController {
       displayId: 'velocity-value',
       displayFormatter: (value) => value.toString()
     });
+
+    // Wire up internal BPM slider with display update
+    if (this.internalBPMSlider) {
+      this.wireControl({
+        id: 'internal-bpm',
+        type: 'range',
+        setter: (value) => {
+          if (this.internalBPMSlider) {
+            this.internalBPMSlider.value = value;
+          }
+        },
+        getter: () => this.internalBPMSlider?.value || '120',
+        displayId: 'internal-bpm-value',
+        displayFormatter: (value) => value.toString()
+      });
+    }
 
     // Prevent form submission on enter
     document.querySelectorAll('input, select').forEach(element => {
@@ -1020,6 +1044,70 @@ export class UIController {
       if (keyElement) {
         keyElement.classList.add('active');
       }
+    });
+  }
+
+  /**
+   * Sets the clock source visibility (shows/hides external vs internal controls)
+   */
+  setClockSourceVisibility(source: 'external' | 'internal'): void {
+    if (this.externalClockControls && this.internalClockControls) {
+      if (source === 'internal') {
+        this.externalClockControls.style.display = 'none';
+        this.internalClockControls.style.display = '';
+      } else {
+        this.externalClockControls.style.display = '';
+        this.internalClockControls.style.display = 'none';
+      }
+    }
+  }
+
+  /**
+   * Gets the current clock source selection
+   */
+  getClockSource(): 'external' | 'internal' {
+    return (this.clockSourceSelect?.value as 'external' | 'internal') || 'external';
+  }
+
+  /**
+   * Gets the current internal BPM value
+   */
+  getInternalBPM(): number {
+    return parseInt(this.internalBPMSlider?.value || '120');
+  }
+
+  /**
+   * Sets the internal BPM value
+   */
+  setInternalBPM(bpm: number): void {
+    if (this.internalBPMSlider) {
+      this.internalBPMSlider.value = bpm.toString();
+      const displayElement = document.getElementById('internal-bpm-value');
+      if (displayElement) {
+        displayElement.textContent = bpm.toString();
+      }
+    }
+  }
+
+  /**
+   * Registers a callback for clock source changes
+   */
+  onClockSourceChange(handler: (source: 'external' | 'internal') => void): void {
+    if (!this.clockSourceSelect) return;
+    this.clockSourceSelect.addEventListener('change', () => {
+      const source = this.getClockSource();
+      this.setClockSourceVisibility(source);
+      handler(source);
+    });
+  }
+
+  /**
+   * Registers a callback for internal BPM changes
+   */
+  onInternalBPMChange(handler: (bpm: number) => void): void {
+    if (!this.internalBPMSlider) return;
+    this.internalBPMSlider.addEventListener('input', () => {
+      handler(this.getInternalBPM());
     });
   }
 }

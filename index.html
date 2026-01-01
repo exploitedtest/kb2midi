@@ -66,10 +66,24 @@
         </div>
 
         <div class="control-group">
-            <label for="midi-clock-input">Clock Input</label>
+            <label for="clock-source">Clock Source</label>
+            <select id="clock-source" tabindex="-1">
+                <option value="external">External MIDI</option>
+                <option value="internal">Internal Clock</option>
+            </select>
+        </div>
+
+        <div class="control-group" id="external-clock-controls">
+            <label for="midi-clock-input">MIDI Clock Input</label>
             <select id="midi-clock-input" tabindex="-1">
                 <option value="auto">Auto (Best)</option>
             </select>
+        </div>
+
+        <div class="control-group" id="internal-clock-controls" style="display: none;">
+            <label for="internal-bpm">BPM</label>
+            <input type="range" id="internal-bpm" min="20" max="240" value="120" step="1" tabindex="-1">
+            <span id="internal-bpm-value">120</span>
         </div>
 
         <div class="control-group">
