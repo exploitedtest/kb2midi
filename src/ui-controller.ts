@@ -958,7 +958,9 @@ export class UIController {
    * Gets the current internal BPM slider value
    */
   getInternalBpm(): number {
-    return this.internalBpmSlider ? parseInt(this.internalBpmSlider.value) : 120;
+    if (!this.internalBpmSlider) return 120;
+    const parsed = parseInt(this.internalBpmSlider.value, 10);
+    return isNaN(parsed) ? 120 : parsed;
   }
 
   /**
@@ -980,7 +982,8 @@ export class UIController {
   onInternalBpmChange(handler: (bpm: number) => void): void {
     if (!this.internalBpmSlider) return;
     this.internalBpmSlider.addEventListener('input', () => {
-      const bpm = parseInt(this.internalBpmSlider!.value);
+      const parsed = parseInt(this.internalBpmSlider!.value, 10);
+      const bpm = isNaN(parsed) ? 120 : parsed;
       // Update display
       const display = document.getElementById('internal-bpm-value');
       if (display) {
