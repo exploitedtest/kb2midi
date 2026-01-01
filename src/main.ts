@@ -41,7 +41,7 @@ class MIDIController {
   private initializing = true;
   // Prevents overlapping resume calls
   private resuming = false;
-  private preferredClockInputId: string = 'auto';
+  private preferredClockInputId: string = 'internal';
   // Momentary arpeggiator rate boost state (Tab key)
   private arpBoostActive: boolean = false;
   private arpBoostBaseDivisor: number | null = null;
