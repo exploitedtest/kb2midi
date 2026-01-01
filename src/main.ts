@@ -13,7 +13,7 @@ import {
   VelocityHumanize
 } from './arpeggiator';
 import { ScaleFilter } from './scale-filter';
-import { ControllerState, ArpeggiatorPattern, MIDI_MOD_WHEEL } from './types';
+import { ControllerState, ArpeggiatorPattern, ClockSource, MIDI_MOD_WHEEL } from './types';
 
 // Enhanced control configuration with better type safety
 interface ControlConfig {
@@ -149,6 +149,11 @@ class MIDIController {
     // Populate clock inputs and wire selection
     this.refreshClockInputs();
     this.uiController.onClockInputChange((id) => this.handleClockInputSelect(id));
+
+    // Wire clock source selection
+    this.uiController.onClockSourceChange((source) => this.handleClockSourceChange(source as ClockSource));
+    this.uiController.onInternalBPMChange((bpm) => this.handleInternalBPMChange(bpm));
+    this.uiController.onInternalClockToggle(() => this.handleInternalClockToggle());
 
     // Populate note input sources and wire selection
     this.refreshNoteInputSources();
@@ -1310,6 +1315,56 @@ class MIDIController {
       this.midiEngine.selectBestClockInput();
       this.preferredClockInputId = 'auto';
       this.refreshClockInputs();
+    }
+  }
+
+  /**
+   * Handle clock source change (external, internal, off)
+   */
+  private handleClockSourceChange(source: ClockSource): void {
+    this.clockSync.setClockSource(source);
+
+    // Update UI visibility
+    const externalControls = document.getElementById('external-clock-controls');
+    const internalControls = document.getElementById('internal-clock-controls');
+
+    if (externalControls && internalControls) {
+      externalControls.style.display = source === 'external' ? 'block' : 'none';
+      internalControls.style.display = source === 'internal' ? 'block' : 'none';
+    }
+
+    // Update status message
+    if (source === 'internal') {
+      this.uiController.updateStatus('Internal Master Clock Selected', 'info');
+    } else if (source === 'off') {
+      this.uiController.updateStatus('Clock Disabled', 'info');
+    } else {
+      this.uiController.updateStatus('External MIDI Clock Selected', 'info');
+    }
+  }
+
+  /**
+   * Handle internal clock BPM change
+   */
+  private handleInternalBPMChange(bpm: number): void {
+    this.clockSync.setInternalBPM(bpm);
+  }
+
+  /**
+   * Handle internal clock start/stop toggle
+   */
+  private handleInternalClockToggle(): void {
+    const button = document.getElementById('internal-clock-toggle');
+    if (!button) return;
+
+    if (this.clockSync.isRunning()) {
+      this.clockSync.stopInternalClock();
+      button.textContent = 'Start';
+      this.uiController.updateStatus('Internal Clock Stopped', 'info');
+    } else {
+      this.clockSync.startInternalClock();
+      button.textContent = 'Stop';
+      this.uiController.updateStatus('Internal Clock Running', 'success');
     }
   }
 
