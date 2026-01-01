@@ -103,22 +103,32 @@ export class ClockSync {
   /**
    * Handles MIDI Start message (0xFA)
    * Resets clock and starts timing
+   * Ignored when using internal clock
    */
   onMIDIStart(): void {
+    if (this.state.source !== 'external') {
+      return;
+    }
+
     this.state.isRunning = true;
     this.state.ticks = 0;
     this.state.status = 'synced';
     this.state.lastTickTime = -1;
     this.tickIntervals = []; // Clear intervals on start
-    
+
     this.onStartCallbacks.forEach(callback => callback());
   }
 
   /**
    * Handles MIDI Stop message (0xFC)
    * Stops timing and resets state
+   * Ignored when using internal clock
    */
   onMIDIStop(): void {
+    if (this.state.source !== 'external') {
+      return;
+    }
+
     this.state.isRunning = false;
     this.state.status = 'stopped';
     this.state.lastTickTime = -1;
@@ -127,15 +137,20 @@ export class ClockSync {
       clearTimeout(this.stopTimeout);
       this.stopTimeout = null;
     }
-    
+
     this.onStopCallbacks.forEach(callback => callback());
   }
 
   /**
    * Handles MIDI Continue message (0xFB)
    * Resumes timing without resetting ticks
+   * Ignored when using internal clock
    */
   onMIDIContinue(): void {
+    if (this.state.source !== 'external') {
+      return;
+    }
+
     this.state.isRunning = true;
     this.state.status = 'synced';
     this.state.lastTickTime = -1; // Ignore stale intervals after a pause
@@ -144,7 +159,7 @@ export class ClockSync {
       clearTimeout(this.stopTimeout);
       this.stopTimeout = null;
     }
-    
+
     this.onStartCallbacks.forEach(callback => callback());
   }
 
@@ -205,7 +220,8 @@ export class ClockSync {
   }
 
   /**
-   * Removes all event callbacks
+   * Removes all event callbacks and stops internal clock
+   * Called during cleanup to prevent memory leaks
    */
   clearCallbacks(): void {
     this.onTickCallbacks = [];
@@ -213,6 +229,12 @@ export class ClockSync {
     this.onSixteenthNoteCallbacks = [];
     this.onStartCallbacks = [];
     this.onStopCallbacks = [];
+
+    // Stop internal clock to prevent memory leak
+    if (this.internalClockInterval) {
+      clearInterval(this.internalClockInterval);
+      this.internalClockInterval = null;
+    }
   }
 
   // Internal Master Clock Methods
@@ -238,7 +260,15 @@ export class ClockSync {
   }
 
   /**
+   * Checks if the internal clock is currently running
+   */
+  isInternalClockRunning(): boolean {
+    return this.state.source === 'internal' && this.internalClockInterval !== null;
+  }
+
+  /**
    * Sets the internal clock BPM (20-300 range)
+   * If clock is running, smoothly transitions to new BPM without resetting ticks
    */
   setInternalBPM(bpm: number): void {
     if (bpm < 20 || bpm > 300) {
@@ -248,10 +278,16 @@ export class ClockSync {
 
     this.state.bpm = bpm;
 
-    // Restart internal clock if currently running to apply new BPM
-    if (this.state.source === 'internal' && this.state.isRunning) {
-      this.stopInternalClock();
-      this.startInternalClock();
+    // If internal clock is running, restart interval without resetting state
+    if (this.state.source === 'internal' && this.internalClockInterval) {
+      clearInterval(this.internalClockInterval);
+
+      const ticksPerSecond = (this.state.bpm / 60) * 24;
+      const intervalMs = 1000 / ticksPerSecond;
+
+      this.internalClockInterval = setInterval(() => {
+        this.generateInternalTick();
+      }, intervalMs);
     }
   }
 

@@ -42,6 +42,10 @@ class MIDIController {
   // Prevents overlapping resume calls
   private resuming = false;
   private preferredClockInputId: string = 'auto';
+  // Internal clock state for resume
+  private internalClockWasRunning: boolean = false;
+  private savedClockSource: ClockSource = 'external';
+  private savedInternalBPM: number = 120;
   // Momentary arpeggiator rate boost state (Tab key)
   private arpBoostActive: boolean = false;
   private arpBoostBaseDivisor: number | null = null;
@@ -1133,20 +1137,25 @@ class MIDIController {
   cleanup(): void {
     // Stop all active notes
     this.stopAllNotes();
-    
+
+    // Save internal clock state for resume
+    this.savedClockSource = this.clockSync.getClockSource();
+    this.internalClockWasRunning = this.clockSync.isInternalClockRunning();
+    this.savedInternalBPM = this.clockSync.getBPM();
+
     // Clean up MIDI engine
     this.midiEngine.cleanup();
-    
+
     // Clean up keyboard input
     this.keyboardInput.cleanup();
-    
+
     // Clean up arpeggiator
     this.arpeggiator.setEnabled(false);
     this.arpeggiator.clearStepCallbacks();
-    
-    // Clean up clock sync callbacks
+
+    // Clean up clock sync callbacks (also stops internal clock)
     this.clockSync.clearCallbacks();
-    
+
     // Clear local state
     this.state.activeNotes.clear();
     this.state.sustainedNotes.clear();
@@ -1226,6 +1235,21 @@ class MIDIController {
         } else {
           this.handleNoteInputSelect('keyboard');
         }
+      }
+
+      // Restore internal clock state
+      if (this.savedClockSource !== 'external') {
+        this.clockSync.setClockSource(this.savedClockSource);
+        if (this.savedClockSource === 'internal') {
+          this.clockSync.setInternalBPM(this.savedInternalBPM);
+          if (this.internalClockWasRunning) {
+            this.clockSync.startInternalClock();
+            const button = document.getElementById('internal-clock-toggle');
+            if (button) button.textContent = 'Stop';
+          }
+        }
+        // Update UI visibility
+        this.handleClockSourceChange(this.savedClockSource);
       }
 
       if (midiReady) {

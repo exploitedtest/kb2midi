@@ -219,5 +219,79 @@ describe('ClockSync', () => {
       expect(clockSync.getClockSource()).toBe('internal');
       expect(() => clockSync.startInternalClock()).not.toThrow();
     });
+
+    it('should stop internal clock when clearCallbacks is called', () => {
+      clockSync.setClockSource('internal');
+      clockSync.startInternalClock();
+      expect(clockSync.isInternalClockRunning()).toBe(true);
+
+      clockSync.clearCallbacks();
+
+      expect(clockSync.isInternalClockRunning()).toBe(false);
+    });
+
+    it('should ignore external MIDI Start when using internal clock', () => {
+      clockSync.setClockSource('internal');
+      clockSync.startInternalClock();
+      const ticksBefore = clockSync.getTicks();
+
+      vi.advanceTimersByTime(100); // Let some ticks happen
+      const ticksAfter = clockSync.getTicks();
+
+      // External MIDI Start should not reset ticks
+      clockSync.onMIDIStart();
+      expect(clockSync.getTicks()).toBe(ticksAfter); // Should not reset to 0
+    });
+
+    it('should ignore external MIDI Stop when using internal clock', () => {
+      clockSync.setClockSource('internal');
+      clockSync.startInternalClock();
+      expect(clockSync.isRunning()).toBe(true);
+
+      clockSync.onMIDIStop();
+
+      // Should still be running
+      expect(clockSync.isRunning()).toBe(true);
+      expect(clockSync.isInternalClockRunning()).toBe(true);
+    });
+
+    it('should not reset ticks when changing BPM during playback', () => {
+      clockSync.setClockSource('internal');
+      clockSync.setInternalBPM(120);
+      clockSync.startInternalClock();
+
+      vi.advanceTimersByTime(500);
+      const ticksBeforeChange = clockSync.getTicks();
+      expect(ticksBeforeChange).toBeGreaterThan(0);
+
+      // Change BPM while running
+      clockSync.setInternalBPM(180);
+
+      // Ticks should not reset
+      expect(clockSync.getTicks()).toBe(ticksBeforeChange);
+      expect(clockSync.isRunning()).toBe(true);
+    });
+
+    it('should change tick rate when BPM changes during playback', () => {
+      const tickCallback = vi.fn();
+      clockSync.onTick(tickCallback);
+
+      clockSync.setClockSource('internal');
+      clockSync.setInternalBPM(120);
+      clockSync.startInternalClock();
+
+      vi.advanceTimersByTime(500);
+      const ticks120 = tickCallback.mock.calls.length;
+      tickCallback.mockClear();
+
+      // Change to 240 BPM (double the rate)
+      clockSync.setInternalBPM(240);
+
+      vi.advanceTimersByTime(500);
+      const ticks240 = tickCallback.mock.calls.length;
+
+      // Should have roughly double the ticks
+      expect(ticks240).toBeGreaterThan(ticks120 * 1.8); // Allow some tolerance
+    });
   });
 });
