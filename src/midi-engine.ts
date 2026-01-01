@@ -187,17 +187,24 @@ export class MIDIEngine {
 
   /**
    * Allows manual selection of MIDI clock input (e.g., from UI)
+   * @param input - The MIDI input to use for clock messages, or null to disable external clock
    */
-  setInput(input: WebMidi.MIDIInput): void {
+  setInput(input: WebMidi.MIDIInput | null): void {
     // Detach any existing listener to prevent duplicate clock ticks on re-select
     if (this.state.midiInput) {
       try {
         this.state.midiInput.removeEventListener('midimessage', this.handleMIDIMessage as any);
       } catch {}
     }
+
     this.state.midiInput = input;
-    this.state.midiInput.addEventListener('midimessage', this.handleMIDIMessage as any);
-    console.log(`Switched MIDI Clock Input to: ${input.name || 'Unknown'}`);
+
+    if (input) {
+      this.state.midiInput!.addEventListener('midimessage', this.handleMIDIMessage as any);
+      console.log(`Switched MIDI Clock Input to: ${input.name || 'Unknown'}`);
+    } else {
+      console.log('MIDI Clock Input disabled (using internal clock)');
+    }
   }
 
   /**

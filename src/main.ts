@@ -150,6 +150,17 @@ class MIDIController {
     this.refreshClockInputs();
     this.uiController.onClockInputChange((id) => this.handleClockInputSelect(id));
 
+    // Wire up internal BPM slider
+    this.uiController.onInternalBpmChange((bpm) => {
+      this.clockSync.setInternalClockBPM(bpm);
+      if (this.clockSync.isInternalClockRunning()) {
+        this.uiController.updateClockStatus('synced', bpm);
+      }
+    });
+
+    // Start with internal clock (default selection)
+    this.handleClockInputSelect('internal');
+
     // Populate note input sources and wire selection
     this.refreshNoteInputSources();
     this.uiController.onNoteInputChange((source) => this.handleNoteInputSelect(source));
@@ -1128,20 +1139,23 @@ class MIDIController {
   cleanup(): void {
     // Stop all active notes
     this.stopAllNotes();
-    
+
     // Clean up MIDI engine
     this.midiEngine.cleanup();
-    
+
     // Clean up keyboard input
     this.keyboardInput.cleanup();
-    
+
     // Clean up arpeggiator
     this.arpeggiator.setEnabled(false);
     this.arpeggiator.clearStepCallbacks();
-    
+
+    // Stop internal clock if running
+    this.clockSync.stopInternalClock();
+
     // Clean up clock sync callbacks
     this.clockSync.clearCallbacks();
-    
+
     // Clear local state
     this.state.activeNotes.clear();
     this.state.sustainedNotes.clear();
@@ -1191,7 +1205,13 @@ class MIDIController {
       this.refreshClockInputs();
       this.refreshNoteInputSources();
 
-      if (this.preferredClockInputId === 'auto') {
+      if (this.preferredClockInputId === 'internal') {
+        // Restart internal clock
+        const bpm = this.uiController.getInternalBpm();
+        this.clockSync.startInternalClock(bpm);
+        this.uiController.setInternalBpmVisible(true);
+        this.uiController.updateClockStatus('synced', bpm);
+      } else if (this.preferredClockInputId === 'auto') {
         this.midiEngine.selectBestClockInput();
       } else {
         const inputs = this.midiEngine.getAvailableInputs();
@@ -1298,6 +1318,24 @@ class MIDIController {
    */
   private handleClockInputSelect(id: string): void {
     this.preferredClockInputId = id;
+
+    // Handle internal clock
+    if (id === 'internal') {
+      // Stop listening to external clock
+      this.midiEngine.setInput(null);
+      // Show BPM slider
+      this.uiController.setInternalBpmVisible(true);
+      // Start internal clock with current BPM
+      const bpm = this.uiController.getInternalBpm();
+      this.clockSync.startInternalClock(bpm);
+      this.uiController.updateClockStatus('synced', bpm);
+      return;
+    }
+
+    // Stop internal clock if switching to external
+    this.clockSync.stopInternalClock();
+    this.uiController.setInternalBpmVisible(false);
+
     if (id === 'auto') {
       this.midiEngine.selectBestClockInput();
       return;

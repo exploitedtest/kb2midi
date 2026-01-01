@@ -355,6 +355,26 @@ body {
     box-shadow: 0 0 8px rgba(76, 175, 80, 0.35);
 }
 
+/* Internal BPM slider control */
+.internal-bpm-control {
+    padding: 10px 15px;
+}
+
+.internal-bpm-control label {
+    font-size: 13px;
+}
+
+.internal-bpm-control input[type="range"] {
+    width: 100%;
+    margin: 5px 0 0 0;
+    cursor: pointer;
+}
+
+#internal-bpm-value {
+    font-weight: 600;
+    color: var(--accent-color, #4CAF50);
+}
+
 .piano-container {
     background: var(--piano-bg);
     padding: 20px;
