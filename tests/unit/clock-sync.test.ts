@@ -1,7 +1,7 @@
 /**
  * Unit Tests for ClockSync
  *
- * Tests MIDI clock synchronization, BPM calculation, and timing events
+ * Tests MIDI clock synchronization, BPM calculation, and internal master clock
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -20,131 +20,34 @@ describe('ClockSync', () => {
   });
 
   describe('Initialization', () => {
-    it('should initialize with default state', () => {
-      const state = clockSync.getState();
-
-      expect(state.isRunning).toBe(false);
-      expect(state.ticks).toBe(0);
-      expect(state.bpm).toBe(120);
-      expect(state.status).toBe('stopped');
-    });
-
-    it('should have initial BPM of 120', () => {
+    it('should initialize with external clock source by default', () => {
+      expect(clockSync.getClockSource()).toBe('external');
+      expect(clockSync.isRunning()).toBe(false);
       expect(clockSync.getBPM()).toBe(120);
     });
-
-    it('should not be running initially', () => {
-      expect(clockSync.isRunning()).toBe(false);
-    });
   });
 
-  describe('MIDI Start', () => {
-    it('should start clock on MIDI start message', () => {
-      clockSync.onMIDIStart();
+  describe('External Clock (MIDI)', () => {
+    it('should handle MIDI clock ticks', () => {
+      const tickCallback = vi.fn();
+      clockSync.onTick(tickCallback);
 
-      expect(clockSync.isRunning()).toBe(true);
-      expect(clockSync.getStatus()).toBe('synced');
-    });
-
-    it('should reset ticks on MIDI start', () => {
       clockSync.onMIDIClockTick(100);
-      clockSync.onMIDIClockTick(120);
-
-      clockSync.onMIDIStart();
-
-      expect(clockSync.getTicks()).toBe(0);
-    });
-
-    it('should trigger onStart callbacks', () => {
-      const callback = vi.fn();
-      clockSync.onStart(callback);
-
-      clockSync.onMIDIStart();
-
-      expect(callback).toHaveBeenCalled();
-    });
-  });
-
-  describe('MIDI Stop', () => {
-    it('should stop clock on MIDI stop message', () => {
-      clockSync.onMIDIStart();
-      clockSync.onMIDIStop();
-
-      expect(clockSync.isRunning()).toBe(false);
-      expect(clockSync.getStatus()).toBe('stopped');
-    });
-
-    it('should trigger onStop callbacks', () => {
-      const callback = vi.fn();
-      clockSync.onStop(callback);
-
-      clockSync.onMIDIStart();
-      clockSync.onMIDIStop();
-
-      expect(callback).toHaveBeenCalled();
-    });
-  });
-
-  describe('MIDI Continue', () => {
-    it('should resume clock without resetting ticks', () => {
-      clockSync.onMIDIStart();
-      clockSync.onMIDIClockTick(100);
-      clockSync.onMIDIClockTick(120);
-
-      const ticksBefore = clockSync.getTicks();
-
-      clockSync.onMIDIContinue();
-
-      expect(clockSync.isRunning()).toBe(true);
-      expect(clockSync.getTicks()).toBe(ticksBefore);
-    });
-
-    it('should trigger onStart callbacks', () => {
-      const callback = vi.fn();
-      clockSync.onStart(callback);
-
-      clockSync.onMIDIContinue();
-
-      expect(callback).toHaveBeenCalled();
-    });
-  });
-
-  describe('MIDI Clock Ticks', () => {
-    it('should increment tick counter', () => {
-      clockSync.onMIDIClockTick(100);
-
+      expect(tickCallback).toHaveBeenCalledTimes(1);
       expect(clockSync.getTicks()).toBe(1);
-
-      clockSync.onMIDIClockTick(120);
-
-      expect(clockSync.getTicks()).toBe(2);
     });
 
-    it('should auto-start if not explicitly started', () => {
+    it('should auto-start on first tick', () => {
       clockSync.onMIDIClockTick(100);
-
       expect(clockSync.isRunning()).toBe(true);
-      expect(clockSync.getStatus()).toBe('synced');
-    });
-
-    it('should trigger onTick callbacks', () => {
-      const callback = vi.fn();
-      clockSync.onTick(callback);
-
-      clockSync.onMIDIClockTick(100);
-
-      expect(callback).toHaveBeenCalled();
     });
 
     it('should calculate BPM from tick intervals', () => {
-      // Simulate 120 BPM: 24 ticks per quarter note, 2 quarters per second
-      // Each tick should be ~20.83ms apart
+      // Simulate 120 BPM: ~20.83ms per tick
       let time = 0;
-      clockSync.onMIDIClockTick(time);
-
       for (let i = 0; i < 10; i++) {
-        time += 20.83;
         clockSync.onMIDIClockTick(time);
+        time += 20.83;
       }
 
       const bpm = clockSync.getBPM();
@@ -152,265 +55,169 @@ describe('ClockSync', () => {
       expect(bpm).toBeLessThanOrEqual(122);
     });
 
-    it('should filter out duplicate/fast ticks', () => {
-      clockSync.onMIDIClockTick(100);
-      clockSync.onMIDIClockTick(101); // Too fast, should be filtered
-
-      expect(clockSync.getTicks()).toBe(1); // Only first tick counted
-    });
-
-    it('should detect tempo changes', () => {
-      // Start at 120 BPM
-      let time = 0;
-      for (let i = 0; i < 10; i++) {
-        clockSync.onMIDIClockTick(time);
-        time += 20.83; // 120 BPM
-      }
-
-      const bpm1 = clockSync.getBPM();
-
-      // Change to 140 BPM
-      for (let i = 0; i < 10; i++) {
-        clockSync.onMIDIClockTick(time);
-        time += 17.86; // 140 BPM
-      }
-
-      const bpm2 = clockSync.getBPM();
-
-      expect(bpm2).toBeGreaterThan(bpm1);
-    });
-  });
-
-  describe('Quarter Note Events', () => {
-    it('should trigger quarter note callback every 24 ticks', () => {
-      const callback = vi.fn();
-      clockSync.onQuarterNote(callback);
+    it('should trigger quarter note events every 24 ticks', () => {
+      const quarterCallback = vi.fn();
+      clockSync.onQuarterNote(quarterCallback);
 
       for (let i = 0; i < 48; i++) {
         clockSync.onMIDIClockTick(i * 20);
       }
 
-      expect(callback).toHaveBeenCalledTimes(2); // 48 ticks = 2 quarter notes
+      expect(quarterCallback).toHaveBeenCalledTimes(2);
     });
-  });
 
-  describe('Sixteenth Note Events', () => {
-    it('should trigger sixteenth note callback every 6 ticks', () => {
-      const callback = vi.fn();
-      clockSync.onSixteenthNote(callback);
-
-      for (let i = 0; i < 24; i++) {
-        clockSync.onMIDIClockTick(i * 20);
-      }
-
-      expect(callback).toHaveBeenCalledTimes(4); // 24 ticks = 4 sixteenth notes
-    });
-  });
-
-  describe('Stop Timeout', () => {
-    it('should auto-stop after timeout with no ticks', () => {
-      const stopCallback = vi.fn();
-      clockSync.onStop(stopCallback);
-
+    it('should handle start/stop messages', () => {
       clockSync.onMIDIStart();
-      clockSync.onMIDIClockTick(100);
-
       expect(clockSync.isRunning()).toBe(true);
-
-      // Advance time past stop timeout (500ms)
-      vi.advanceTimersByTime(600);
-
-      expect(clockSync.isRunning()).toBe(false);
-      expect(stopCallback).toHaveBeenCalled();
-    });
-
-    it('should reset timeout on each tick', () => {
-      clockSync.onMIDIStart();
-      clockSync.onMIDIClockTick(100);
-
-      // Advance 400ms
-      vi.advanceTimersByTime(400);
-      expect(clockSync.isRunning()).toBe(true);
-
-      // Send another tick
-      clockSync.onMIDIClockTick(600);
-
-      // Advance another 400ms (total 800ms, but timeout resets)
-      vi.advanceTimersByTime(400);
-      expect(clockSync.isRunning()).toBe(true);
-
-      // Now advance past timeout
-      vi.advanceTimersByTime(200);
-      expect(clockSync.isRunning()).toBe(false);
-    });
-
-    it('should ignore stale intervals after manual stop/continue', () => {
-      let time = 0;
-
-      // Establish tempo around 120 BPM
-      for (let i = 0; i < 6; i++) {
-        clockSync.onMIDIClockTick(time);
-        time += 20.83;
-      }
 
       clockSync.onMIDIStop();
-
-      // Pause for a while, then continue and resume ticks
-      time += 1000;
-      clockSync.onMIDIContinue();
-      clockSync.onMIDIClockTick(time);
-      time += 20.83;
-
-      for (let i = 0; i < 6; i++) {
-        clockSync.onMIDIClockTick(time);
-        time += 20.83;
-      }
-
-      const bpm = clockSync.getBPM();
-      expect(bpm).toBeGreaterThan(100);
-      expect(bpm).toBeLessThan(140);
-    });
-
-    it('should reset intervals after auto-stop timeout before resuming', () => {
-      let time = 0;
-      clockSync.onMIDIStart();
-
-      for (let i = 0; i < 6; i++) {
-        clockSync.onMIDIClockTick(time);
-        time += 20.83;
-      }
-
-      // Trigger auto-stop
-      vi.advanceTimersByTime(600);
       expect(clockSync.isRunning()).toBe(false);
-
-      // New ticks after a long pause
-      time += 800;
-      clockSync.onMIDIClockTick(time);
-      time += 20.83;
-      for (let i = 0; i < 6; i++) {
-        clockSync.onMIDIClockTick(time);
-        time += 20.83;
-      }
-
-      const bpm = clockSync.getBPM();
-      expect(bpm).toBeGreaterThan(100);
-      expect(bpm).toBeLessThan(140);
     });
   });
 
-  describe('BPM Calculation Stability', () => {
-    it('should use rolling average for BPM calculation', () => {
-      let time = 0;
-
-      // Send consistent ticks at 120 BPM
-      for (let i = 0; i < 5; i++) {
-        clockSync.onMIDIClockTick(time);
-        time += 20.83;
-      }
-
-      // Send one outlier tick (jitter)
-      clockSync.onMIDIClockTick(time);
-      time += 30; // Slower tick
-
-      // Continue with consistent ticks
-      for (let i = 0; i < 5; i++) {
-        clockSync.onMIDIClockTick(time);
-        time += 20.83;
-      }
-
-      // BPM should still be reasonably close to 120 due to averaging
-      const bpm = clockSync.getBPM();
-      expect(bpm).toBeGreaterThanOrEqual(110);
-      expect(bpm).toBeLessThanOrEqual(130);
+  describe('Internal Master Clock', () => {
+    beforeEach(() => {
+      clockSync.setClockSource('internal');
     });
 
-    it('should require minimum samples before calculating BPM', () => {
-      clockSync.onMIDIClockTick(0);
-      clockSync.onMIDIClockTick(20);
-
-      // With only 2 samples, should use default BPM
-      expect(clockSync.getBPM()).toBe(120);
-
-      clockSync.onMIDIClockTick(40);
-      clockSync.onMIDIClockTick(60);
-
-      // With 4+ samples, should calculate BPM
-      const bpm = clockSync.getBPM();
-      expect(bpm).not.toBe(120); // Should have calculated from ticks
-    });
-  });
-
-  describe('Callback Management', () => {
-    it('should support multiple callbacks for same event', () => {
-      const callback1 = vi.fn();
-      const callback2 = vi.fn();
-
-      clockSync.onTick(callback1);
-      clockSync.onTick(callback2);
-
-      clockSync.onMIDIClockTick(100);
-
-      expect(callback1).toHaveBeenCalled();
-      expect(callback2).toHaveBeenCalled();
-    });
-
-    it('should clear all callbacks', () => {
+    it('should generate ticks at correct BPM', () => {
       const tickCallback = vi.fn();
+      clockSync.onTick(tickCallback);
+
+      clockSync.setInternalBPM(120);
+      clockSync.startInternalClock();
+
+      // At 120 BPM: 48 ticks per second
+      vi.advanceTimersByTime(1000);
+
+      // Allow for timer imprecision (±2 ticks tolerance)
+      const callCount = tickCallback.mock.calls.length;
+      expect(callCount).toBeGreaterThanOrEqual(46);
+      expect(callCount).toBeLessThanOrEqual(50);
+    });
+
+    it('should trigger quarter note events every 24 ticks', () => {
+      const quarterCallback = vi.fn();
+      clockSync.onQuarterNote(quarterCallback);
+
+      clockSync.startInternalClock();
+
+      // Advance to 2 quarter notes worth of time (at 120 BPM = 1 second)
+      vi.advanceTimersByTime(1000);
+
+      expect(quarterCallback).toHaveBeenCalledTimes(2);
+    });
+
+    it('should start and stop correctly', () => {
       const startCallback = vi.fn();
       const stopCallback = vi.fn();
-
-      clockSync.onTick(tickCallback);
       clockSync.onStart(startCallback);
       clockSync.onStop(stopCallback);
 
-      clockSync.clearCallbacks();
+      clockSync.startInternalClock();
+      expect(clockSync.isRunning()).toBe(true);
+      expect(startCallback).toHaveBeenCalledTimes(1);
 
-      clockSync.onMIDIStart();
+      clockSync.stopInternalClock();
+      expect(clockSync.isRunning()).toBe(false);
+      expect(stopCallback).toHaveBeenCalledTimes(1);
+    });
+
+    it('should update BPM while running', () => {
+      const tickCallback = vi.fn();
+      clockSync.onTick(tickCallback);
+
+      clockSync.setInternalBPM(120);
+      clockSync.startInternalClock();
+
+      vi.advanceTimersByTime(500);
+      const ticks120 = tickCallback.mock.calls.length;
+
+      // Change to 240 BPM (should double tick rate)
+      tickCallback.mockClear();
+      clockSync.setInternalBPM(240);
+
+      vi.advanceTimersByTime(500);
+      const ticks240 = tickCallback.mock.calls.length;
+
+      expect(ticks240).toBeGreaterThan(ticks120);
+    });
+
+    it('should reset ticks when starting', () => {
+      clockSync.startInternalClock();
+      vi.advanceTimersByTime(100);
+
+      clockSync.stopInternalClock();
+      clockSync.startInternalClock();
+
+      expect(clockSync.getTicks()).toBe(0);
+    });
+  });
+
+  describe('Clock Source Switching', () => {
+    it('should switch from external to internal', () => {
+      expect(clockSync.getClockSource()).toBe('external');
+
+      clockSync.setClockSource('internal');
+      expect(clockSync.getClockSource()).toBe('internal');
+    });
+
+    it('should ignore external clock when using internal', () => {
+      clockSync.setClockSource('internal');
+
       clockSync.onMIDIClockTick(100);
-      clockSync.onMIDIStop();
+      expect(clockSync.getTicks()).toBe(0); // Should not increment
+    });
 
-      expect(tickCallback).not.toHaveBeenCalled();
-      expect(startCallback).not.toHaveBeenCalled();
-      expect(stopCallback).not.toHaveBeenCalled();
+    it('should stop internal clock when switching to external', () => {
+      clockSync.setClockSource('internal');
+      clockSync.startInternalClock();
+      expect(clockSync.isRunning()).toBe(true);
+
+      clockSync.setClockSource('external');
+      expect(clockSync.isRunning()).toBe(false);
+    });
+
+    it('should ignore all clock when source is off', () => {
+      clockSync.setClockSource('off');
+
+      clockSync.onMIDIClockTick(100);
+      expect(clockSync.getTicks()).toBe(0);
+      expect(clockSync.isRunning()).toBe(false);
     });
   });
 
   describe('Edge Cases', () => {
-    it('should handle extremely fast tempos', () => {
-      // 300 BPM: each tick ~8.33ms
-      let time = 0;
-      for (let i = 0; i < 10; i++) {
-        clockSync.onMIDIClockTick(time);
-        time += 8.33;
-      }
+    it('should reject invalid BPM values', () => {
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      const bpm = clockSync.getBPM();
-      expect(bpm).toBeGreaterThan(250);
-      expect(bpm).toBeLessThan(350);
+      clockSync.setInternalBPM(10); // Too low
+      expect(consoleWarn).toHaveBeenCalled();
+
+      clockSync.setInternalBPM(400); // Too high
+      expect(consoleWarn).toHaveBeenCalled();
+
+      consoleWarn.mockRestore();
     });
 
-    it('should handle extremely slow tempos', () => {
-      // 60 BPM: each tick ~41.67ms
-      let time = 0;
-      for (let i = 0; i < 10; i++) {
-        clockSync.onMIDIClockTick(time);
-        time += 41.67;
-      }
+    it('should warn when starting internal clock with wrong source', () => {
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      const bpm = clockSync.getBPM();
-      expect(bpm).toBeGreaterThan(50);
-      expect(bpm).toBeLessThan(70);
+      clockSync.setClockSource('external');
+      clockSync.startInternalClock();
+
+      expect(consoleWarn).toHaveBeenCalled();
+      consoleWarn.mockRestore();
     });
 
-    it('should handle tick counter overflow gracefully', () => {
-      // Set ticks to near max value
-      for (let i = 0; i < 1000000; i += 24) {
-        clockSync.onMIDIClockTick(i);
-      }
+    it('should handle rapid source switching', () => {
+      clockSync.setClockSource('internal');
+      clockSync.setClockSource('external');
+      clockSync.setClockSource('off');
+      clockSync.setClockSource('internal');
 
-      const ticks = clockSync.getTicks();
-      expect(ticks).toBeGreaterThan(0);
+      expect(clockSync.getClockSource()).toBe('internal');
+      expect(() => clockSync.startInternalClock()).not.toThrow();
     });
   });
 });

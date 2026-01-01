@@ -1,8 +1,8 @@
-import { ClockSyncState } from './types';
+import { ClockSyncState, ClockSource } from './types';
 
 /**
- * Handles external MIDI clock synchronization
- * Receives MIDI clock messages from DAW and provides timing events for arpeggiator
+ * Handles clock synchronization from external MIDI or internal master clock
+ * Provides unified timing events for arpeggiator regardless of source
  */
 export class ClockSync {
   private state: ClockSyncState = {
@@ -10,8 +10,12 @@ export class ClockSync {
     ticks: 0,
     bpm: 120,
     status: 'stopped',
-    lastTickTime: -1 // -1 sentinel so the first interval is measured on the second tick
+    lastTickTime: -1, // -1 sentinel so the first interval is measured on the second tick
+    source: 'external'
   };
+
+  // Internal clock state
+  private internalClockInterval: ReturnType<typeof setInterval> | null = null;
 
   private onTickCallbacks: (() => void)[] = [];
   private onQuarterNoteCallbacks: (() => void)[] = [];
@@ -28,10 +32,16 @@ export class ClockSync {
   /**
    * Handles incoming MIDI clock tick (0xF8)
    * Calculates BPM and triggers timing events
+   * Ignored when using internal clock
    */
   onMIDIClockTick(nowArg?: number): void {
+    // Ignore external clock when using internal or when clock is off
+    if (this.state.source !== 'external') {
+      return;
+    }
+
     const now = typeof nowArg === 'number' ? nowArg : performance.now();
-    
+
     // If ticks arrive without explicit Start/Continue, consider clock running
     if (!this.state.isRunning) {
       this.state.isRunning = true;
@@ -203,5 +213,109 @@ export class ClockSync {
     this.onSixteenthNoteCallbacks = [];
     this.onStartCallbacks = [];
     this.onStopCallbacks = [];
+  }
+
+  // Internal Master Clock Methods
+
+  /**
+   * Sets the clock source (external, internal, or off)
+   */
+  setClockSource(source: ClockSource): void {
+    // Stop internal clock if switching away from it
+    if (this.state.source === 'internal' && source !== 'internal') {
+      this.stopInternalClock();
+    }
+
+    this.state.source = source;
+    this.state.status = source === 'off' ? 'stopped' : this.state.status;
+  }
+
+  /**
+   * Gets the current clock source
+   */
+  getClockSource(): ClockSource {
+    return this.state.source;
+  }
+
+  /**
+   * Sets the internal clock BPM (20-300 range)
+   */
+  setInternalBPM(bpm: number): void {
+    if (bpm < 20 || bpm > 300) {
+      console.warn(`Invalid BPM: ${bpm}. Must be between 20 and 300.`);
+      return;
+    }
+
+    this.state.bpm = bpm;
+
+    // Restart internal clock if currently running to apply new BPM
+    if (this.state.source === 'internal' && this.state.isRunning) {
+      this.stopInternalClock();
+      this.startInternalClock();
+    }
+  }
+
+  /**
+   * Starts the internal master clock
+   */
+  startInternalClock(): void {
+    if (this.state.source !== 'internal') {
+      console.warn('Cannot start internal clock when source is not set to internal');
+      return;
+    }
+
+    if (this.internalClockInterval) {
+      return; // Already running
+    }
+
+    this.state.isRunning = true;
+    this.state.status = 'synced';
+    this.state.ticks = 0;
+    this.onStartCallbacks.forEach(callback => callback());
+
+    // Calculate tick interval: BPM -> beats/sec -> ticks/sec (24 ticks per beat)
+    const ticksPerSecond = (this.state.bpm / 60) * 24;
+    const intervalMs = 1000 / ticksPerSecond;
+
+    this.internalClockInterval = setInterval(() => {
+      this.generateInternalTick();
+    }, intervalMs);
+  }
+
+  /**
+   * Stops the internal master clock
+   */
+  stopInternalClock(): void {
+    if (this.internalClockInterval) {
+      clearInterval(this.internalClockInterval);
+      this.internalClockInterval = null;
+    }
+
+    if (this.state.isRunning && this.state.source === 'internal') {
+      this.state.isRunning = false;
+      this.state.status = 'stopped';
+      this.onStopCallbacks.forEach(callback => callback());
+    }
+  }
+
+  /**
+   * Generates a single internal clock tick
+   * Fires same callbacks as external clock
+   */
+  private generateInternalTick(): void {
+    this.state.ticks++;
+
+    // Trigger tick callbacks
+    this.onTickCallbacks.forEach(callback => callback());
+
+    // Every 24 ticks = quarter note
+    if (this.state.ticks % 24 === 0) {
+      this.onQuarterNoteCallbacks.forEach(callback => callback());
+    }
+
+    // Every 6 ticks = sixteenth note
+    if (this.state.ticks % 6 === 0) {
+      this.onSixteenthNoteCallbacks.forEach(callback => callback());
+    }
   }
 } 

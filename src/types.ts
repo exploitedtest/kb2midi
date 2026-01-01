@@ -160,10 +160,13 @@ export interface IMidiEngine {
   stopNote(note: number, velocity: number, channel: number): void;
 }
 
+export type ClockSource = 'external' | 'internal' | 'off';
+
 export interface ClockSyncState {
   isRunning: boolean;
   ticks: number;
   bpm: number;
   status: 'synced' | 'free' | 'stopped';
   lastTickTime: number;
+  source: ClockSource;
 }
